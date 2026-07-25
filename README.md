@@ -77,3 +77,4 @@ extension_requested → confirmed (buyer approves OR admin accepts original)
 extension_requested → pending   (buyer rejects → back to admin)
 extension_requested → rejected  (admin rejects)
 ```
+# 1stopMandiAdmin
