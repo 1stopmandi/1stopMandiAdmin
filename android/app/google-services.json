@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "326434444597",
+    "project_id": "stopmandiadmin",
+    "storage_bucket": "stopmandiadmin.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:326434444597:android:ea096d49ef1b3e7283e87c",
+        "android_client_info": {
+          "package_name": "com.onestopmandi.admin"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBqA5sSWpaU1dljAkE35zaOCtwHPhplvTU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
