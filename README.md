@@ -78,3 +78,4 @@ extension_requested → pending   (buyer rejects → back to admin)
 extension_requested → rejected  (admin rejects)
 ```
 # 1stopMandiAdmin
+# 1stopMandiAdmin
