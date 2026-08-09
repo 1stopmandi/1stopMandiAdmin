@@ -20,6 +20,21 @@ import '../../features/users/presentation/screens/user_detail_screen.dart';
 import '../../features/pricing/presentation/screens/legacy_pricing_list_screen.dart';
 import '../../features/pricing/presentation/screens/legacy_pricing_edit_screen.dart';
 import '../../features/pricing/presentation/screens/bulk_pricing_screen.dart';
+import '../../features/employees/presentation/screens/employees_list_screen.dart';
+import '../../features/employees/presentation/screens/employee_detail_screen.dart';
+import '../../features/employees/presentation/screens/employee_form_screen.dart';
+import '../../features/attendance/presentation/screens/attendance_mark_screen.dart';
+import '../../features/attendance/presentation/screens/attendance_history_screen.dart';
+import '../../features/salary/presentation/screens/salary_list_screen.dart';
+import '../../features/salary/presentation/screens/salary_generate_screen.dart';
+import '../../features/salary/presentation/screens/salary_detail_screen.dart';
+import '../../features/employee_dashboard/presentation/screens/employee_dashboard_screen.dart';
+import '../../features/inventory/presentation/screens/inventory_home_screen.dart';
+import '../../features/inventory/presentation/screens/inventory_detail_screen.dart';
+import '../../features/inventory/presentation/screens/inventory_form_screen.dart';
+import '../../features/inventory_dashboard/presentation/screens/inventory_dashboard_screen.dart';
+import '../../features/inventory_reports/presentation/screens/inventory_reports_home_screen.dart';
+import '../../features/inventory_reports/presentation/screens/inventory_report_view_screen.dart';
 import '../widgets/admin_shell.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -164,6 +179,100 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/pricing/bulk',
             builder: (_, __) => const BulkPricingScreen(),
+          ),
+          GoRoute(
+            path: '/employees',
+            builder: (_, __) => const EmployeesListScreen(),
+            routes: [
+              GoRoute(
+                path: 'new',
+                builder: (_, __) => const EmployeeFormScreen(),
+              ),
+              GoRoute(
+                path: ':id',
+                builder: (_, state) =>
+                    EmployeeDetailScreen(employeeId: state.pathParameters['id']!),
+                routes: [
+                  GoRoute(
+                    path: 'edit',
+                    builder: (_, state) => EmployeeFormScreen(
+                      employeeId: state.pathParameters['id']!,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          GoRoute(
+            path: '/attendance',
+            builder: (_, __) => const AttendanceMarkScreen(),
+            routes: [
+              GoRoute(
+                path: 'history/:employeeId',
+                builder: (_, state) => AttendanceHistoryScreen(
+                  employeeId: state.pathParameters['employeeId']!,
+                  employeeName: state.uri.queryParameters['name'] ?? 'Employee',
+                ),
+              ),
+            ],
+          ),
+          GoRoute(
+            path: '/salary',
+            builder: (_, __) => const SalaryListScreen(),
+            routes: [
+              GoRoute(
+                path: 'generate',
+                builder: (_, __) => const SalaryGenerateScreen(),
+              ),
+              GoRoute(
+                path: ':id',
+                builder: (_, state) =>
+                    SalaryDetailScreen(periodId: state.pathParameters['id']!),
+              ),
+            ],
+          ),
+          GoRoute(
+            path: '/employee-dashboard',
+            builder: (_, __) => const EmployeeDashboardScreen(),
+          ),
+          GoRoute(
+            path: '/inventory-mgmt',
+            builder: (_, __) => const InventoryHomeScreen(),
+            routes: [
+              GoRoute(
+                path: 'create',
+                builder: (_, __) => const InventoryFormScreen(),
+              ),
+              GoRoute(
+                path: 'dashboard',
+                builder: (_, __) => const InventoryDashboardScreen(),
+              ),
+              GoRoute(
+                path: 'reports',
+                builder: (_, __) => const InventoryReportsHomeScreen(),
+                routes: [
+                  GoRoute(
+                    path: ':type',
+                    builder: (_, state) => InventoryReportViewScreen(
+                      reportType: state.pathParameters['type']!,
+                    ),
+                  ),
+                ],
+              ),
+              GoRoute(
+                path: ':id',
+                builder: (_, state) =>
+                    InventoryDetailScreen(recordId: state.pathParameters['id']!),
+                routes: [
+                  GoRoute(
+                    path: 'edit',
+                    builder: (_, state) => InventoryFormScreen(
+                      recordId: state.pathParameters['id']!,
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
         ],
       ),

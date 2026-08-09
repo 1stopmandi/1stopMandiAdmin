@@ -19,7 +19,12 @@ class AdminShell extends StatelessWidget {
   bool _isDrawerRoute(String location) {
     return location.startsWith('/uploaded-orders') ||
         location.startsWith('/users') ||
-        location.startsWith('/pricing');
+        location.startsWith('/pricing') ||
+        location.startsWith('/employees') ||
+        location.startsWith('/attendance') ||
+        location.startsWith('/salary') ||
+        location.startsWith('/employee-dashboard') ||
+        location.startsWith('/inventory-mgmt');
   }
 
   @override
@@ -95,6 +100,50 @@ class AdminShell extends StatelessWidget {
               label: 'Bulk Pricing',
               selected: location == '/pricing/bulk',
               onTap: () => _go(context, '/pricing/bulk'),
+            ),
+            const Divider(),
+            _DrawerTile(
+              icon: Icons.badge,
+              label: 'Employees',
+              selected: location.startsWith('/employees'),
+              onTap: () => _go(context, '/employees'),
+            ),
+            _DrawerTile(
+              icon: Icons.fact_check,
+              label: 'Attendance',
+              selected: location.startsWith('/attendance'),
+              onTap: () => _go(context, '/attendance'),
+            ),
+            _DrawerTile(
+              icon: Icons.account_balance_wallet,
+              label: 'Salary',
+              selected: location.startsWith('/salary'),
+              onTap: () => _go(context, '/salary'),
+            ),
+            _DrawerTile(
+              icon: Icons.dashboard,
+              label: 'EMS Dashboard',
+              selected: location.startsWith('/employee-dashboard'),
+              onTap: () => _go(context, '/employee-dashboard'),
+            ),
+            const Divider(),
+            _DrawerTile(
+              icon: Icons.book,
+              label: 'Inventory',
+              selected: location == '/inventory-mgmt' || (location.startsWith('/inventory-mgmt') && !location.contains('dashboard')),
+              onTap: () => _go(context, '/inventory-mgmt'),
+            ),
+            _DrawerTile(
+              icon: Icons.analytics,
+              label: 'Inventory Dashboard',
+              selected: location.startsWith('/inventory-mgmt/dashboard'),
+              onTap: () => _go(context, '/inventory-mgmt/dashboard'),
+            ),
+            _DrawerTile(
+              icon: Icons.assessment,
+              label: 'Inventory Reports',
+              selected: location.startsWith('/inventory-mgmt/reports'),
+              onTap: () => _go(context, '/inventory-mgmt/reports'),
             ),
           ],
         ),
