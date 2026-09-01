@@ -2,21 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import '../../providers/inventory_provider.dart';
-import '../../../../core/providers/providers.dart';
-import '../../../../data/models/client.dart';
-import '../../../../data/models/product.dart';
-import '../../../auth/providers/auth_provider.dart';
 
-/// Sentinel for "Me" (current admin) in Purchased By dropdown.
-const _kPurchasedByMe = '__me__';
+import '../../../../core/providers/providers.dart';
+import '../../../../data/models/product.dart';
+import '../../providers/inventory_provider.dart';
 
 class InventoryFormScreen extends ConsumerStatefulWidget {
   final String? recordId;
+
   const InventoryFormScreen({super.key, this.recordId});
 
   @override
-  ConsumerState<InventoryFormScreen> createState() => _InventoryFormScreenState();
+  ConsumerState<InventoryFormScreen> createState() =>
+      _InventoryFormScreenState();
 }
 
 class _InventoryFormScreenState extends ConsumerState<InventoryFormScreen> {
@@ -24,12 +22,13 @@ class _InventoryFormScreenState extends ConsumerState<InventoryFormScreen> {
   final _titleController = TextEditingController();
   final _notesController = TextEditingController();
   DateTime _selectedDate = DateTime.now();
-  String? _purchasedById;
-  List<_ItemRow> _items = [];
-  bool _saving = false;
-  bool _loading = true;
+  List<_PurchasingBatchRow> _batches = [];
+  List<_DispatchRow> _dispatchItems = [];
+  List<_DamageRow> _damageItems = [];
   List<ProductSummary> _products = [];
-  List<ClientSummary> _clients = [];
+  bool _loading = true;
+  bool _saving = false;
+  bool _readOnly = false;
 
   bool get isEdit => widget.recordId != null;
 
@@ -41,143 +40,129 @@ class _InventoryFormScreenState extends ConsumerState<InventoryFormScreen> {
 
   Future<void> _loadData() async {
     try {
-      final prodResult = await ref.read(productsRepositoryProvider).listProducts(limit: 100, isActive: true);
-      _products = prodResult.products;
-
-      final clientsResult = await ref.read(clientsRepositoryProvider).listClients(
-        accountStatus: 'active',
-        limit: 100,
-      );
-      _clients = clientsResult.clients;
-
-      final currentUserId = ref.read(authProvider).valueOrNull?.id;
+      final result = await ref
+          .read(productsRepositoryProvider)
+          .listProducts(limit: 100, isActive: true);
+      _products = result.products;
 
       if (isEdit) {
-        final record = await ref.read(inventoryRepositoryProvider).getById(widget.recordId!);
+        final record = await ref
+            .read(inventoryRepositoryProvider)
+            .getById(widget.recordId!);
         _titleController.text = record.title;
         _notesController.text = record.notes ?? '';
         _selectedDate = DateTime.parse(record.recordDate);
-        if (record.purchasedById != null &&
-            currentUserId != null &&
-            record.purchasedById == currentUserId) {
-          _purchasedById = _kPurchasedByMe;
-        } else if (record.purchasedByName == 'Me' &&
-            (record.purchasedById == null || record.purchasedById == currentUserId)) {
-          _purchasedById = _kPurchasedByMe;
-        } else {
-          _purchasedById = record.purchasedById;
-          // Keep selection valid if client is outside the loaded page.
-          if (_purchasedById != null &&
-              !_clients.any((c) => c.id == _purchasedById)) {
-            _clients = [
-              ClientSummary(
-                id: _purchasedById!,
-                name: record.purchasedByName,
-                businessName: record.purchasedByName,
-                isSetupCompleted: true,
-                setupApprovalStatus: 'approved',
-                accountStatus: 'active',
-                isBlocked: false,
-                outstandingBalance: 0,
+        _readOnly = record.isFinalized;
+        _batches = record.purchasingBatches
+            .map(
+              (batch) => _PurchasingBatchRow(
+                id: batch.id,
+                purchaseSource: batch.purchaseSource,
+                transportation: _controller(batch.transportationCharge),
+                otherCharges: _controller(batch.otherCharges),
+                items: batch.items
+                    .map(
+                      (item) => _PurchasingRow(
+                        id: item.id,
+                        productId: item.productId,
+                        productName: item.productName ?? '',
+                        weight: _controller(item.weight),
+                        rate: _controller(item.rate),
+                        labour: _controller(item.labourCharge),
+                      ),
+                    )
+                    .toList(),
               ),
-              ..._clients,
-            ];
-          }
-        }
-        _items = record.items.map((item) => _ItemRow(
-          productId: item.productId,
-          productName: item.productName ?? '',
-          productUnit: item.productUnit ?? item.unit,
-          purchasedController: TextEditingController(text: _fmtQty(item.purchasedQty)),
-          goodStockController: TextEditingController(text: _fmtQty(item.goodStock)),
-          recoverableController: TextEditingController(text: _fmtQty(item.recoverable)),
-          wasteController: TextEditingController(text: _fmtQty(item.finalWaste)),
-          // Existing rows already have a breakdown — never auto-overwrite on save.
-          breakdownTouched: true,
-        )).toList();
+            )
+            .toList();
+        _dispatchItems = record.dispatchItems
+            .map(
+              (item) => _DispatchRow(
+                id: item.id,
+                productId: item.productId,
+                productName: item.productName ?? '',
+                dispatchTo: item.dispatchTo,
+                pocket: _controller(item.pocket.toDouble()),
+                weight: _controller(item.weight),
+                rate: _controller(item.rate),
+              ),
+            )
+            .toList();
+        _damageItems = record.damageItems
+            .map(
+              (item) => _DamageRow(
+                id: item.id,
+                productId: item.productId,
+                productName: item.productName ?? '',
+                damageBy: item.damageBy,
+                damage: _controller(item.damageQty),
+                recover: _controller(item.recoverQty),
+              ),
+            )
+            .toList();
       }
-    } catch (e) {
+    } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('Failed to load: $error'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
     if (mounted) setState(() => _loading = false);
   }
 
-  String _fmtQty(double v) => v == v.truncateToDouble() ? v.toInt().toString() : v.toStringAsFixed(2);
+  TextEditingController _controller(double value) => TextEditingController(
+        text: value == value.truncateToDouble()
+            ? value.toInt().toString()
+            : value.toStringAsFixed(2),
+      );
 
   @override
   void dispose() {
     _titleController.dispose();
     _notesController.dispose();
-    for (final item in _items) {
+    for (final batch in _batches) {
+      batch.dispose();
+    }
+    for (final item in _dispatchItems) {
+      item.dispose();
+    }
+    for (final item in _damageItems) {
       item.dispose();
     }
     super.dispose();
   }
 
-  bool get _allValid {
-    if (_items.isEmpty) return false;
-    return _items.every((item) => item.purchasedQty > 0);
-  }
-
   Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    // If user only filled Purchased, default Good Stock = Purchased before validate.
-    for (final item in _items) {
-      item.autofillGoodFromPurchased();
-    }
-    setState(() {});
-
-    if (!_allValid) {
+    if (_readOnly || !_formKey.currentState!.validate()) return;
+    final duplicateError = _duplicateError();
+    if (duplicateError != null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Each product must have a purchased quantity greater than 0',
-          ),
-          backgroundColor: Colors.red,
-        ),
+        SnackBar(content: Text(duplicateError), backgroundColor: Colors.red),
       );
       return;
     }
 
     setState(() => _saving = true);
     try {
-      String? purchasedById = _purchasedById;
-      if (purchasedById == _kPurchasedByMe) {
-        purchasedById = ref.read(authProvider).valueOrNull?.id;
-        if (purchasedById == null) {
-          throw Exception('Not signed in');
-        }
-      }
-
-      final data = {
+      final data = <String, dynamic>{
         'title': _titleController.text.trim(),
         'record_date': DateFormat('yyyy-MM-dd').format(_selectedDate),
-        'purchased_by_id': purchasedById,
-        'notes': _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
-        'items': _items.map((item) => {
-          'product_id': item.productId,
-          'purchased_qty': item.purchasedQty,
-          'good_stock': item.goodStock,
-          'recoverable': item.recoverable,
-          'final_waste': item.waste,
-          'unit': item.productUnit,
-        }).toList(),
+        'notes': _nullable(_notesController.text),
+        'purchasing_batches': _batches.map((batch) => batch.toJson()).toList(),
+        'dispatch_items': _dispatchItems.map((item) => item.toJson()).toList(),
+        'damage_items': _damageItems.map((item) => item.toJson()).toList(),
       };
-
-      final repo = ref.read(inventoryRepositoryProvider);
+      final repository = ref.read(inventoryRepositoryProvider);
       if (isEdit) {
-        await repo.update(widget.recordId!, data);
-        // Detail screen keeps a cached provider; refresh so pop-back shows new data.
+        await repository.update(widget.recordId!, data);
         ref.invalidate(inventoryDetailProvider(widget.recordId!));
       } else {
-        await repo.create(data);
+        await repository.create(data);
       }
-
       ref.read(inventoryListProvider.notifier).refresh();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -188,54 +173,115 @@ class _InventoryFormScreenState extends ConsumerState<InventoryFormScreen> {
         );
         context.pop();
       }
-    } catch (e) {
+    } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('$error'), backgroundColor: Colors.red),
         );
       }
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
-    if (mounted) setState(() => _saving = false);
   }
 
-  void _addProduct() async {
-    final existingIds = _items.map((i) => i.productId).toSet();
-    final available = _products.where((p) => !existingIds.contains(p.id)).toList();
-
-    if (available.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('All products already added')),
-      );
-      return;
+  String? _duplicateError() {
+    for (var index = 0; index < _batches.length; index++) {
+      final ids = <String>{};
+      for (final item in _batches[index].items) {
+        if (!ids.add(item.productId)) {
+          return 'Purchasing batch ${index + 1} has a duplicate product';
+        }
+      }
     }
+    final dispatchKeys = <String>{};
+    for (final item in _dispatchItems) {
+      if (!dispatchKeys.add('${item.productId}:${item.dispatchTo}')) {
+        return 'Dispatch product/destination combinations must be unique';
+      }
+    }
+    final damageKeys = <String>{};
+    for (final item in _damageItems) {
+      if (!damageKeys.add('${item.productId}:${item.damageBy}')) {
+        return 'Damage product/source combinations must be unique';
+      }
+    }
+    return null;
+  }
 
-    final selected = await showModalBottomSheet<List<ProductSummary>>(
-      context: context,
-      isScrollControlled: true,
-      builder: (ctx) => _ProductSelector(available: available),
-    );
+  Future<_ProductSelection?> _selectProducts(
+    Set<String> excludedIds, {
+    bool selectDispatchDestination = false,
+    bool selectDamageSource = false,
+  }) =>
+      showModalBottomSheet<_ProductSelection>(
+        context: context,
+        isScrollControlled: true,
+        builder: (_) => _ProductSelector(
+          available: _products
+              .where((product) => !excludedIds.contains(product.id))
+              .toList(),
+          selectDispatchDestination: selectDispatchDestination,
+          selectDamageSource: selectDamageSource,
+        ),
+      );
 
-    if (selected != null && selected.isNotEmpty) {
-      setState(() {
-        for (final product in selected) {
-          _items.add(_ItemRow(
+  Future<void> _addPurchasingItems(int batchIndex) async {
+    final batch = _batches[batchIndex];
+    final selected = await _selectProducts(
+        batch.items.map((item) => item.productId).toSet());
+    if (selected == null || selected.products.isEmpty || !mounted) return;
+    setState(() {
+      batch.items.addAll(
+        selected.products.map(
+          (product) => _PurchasingRow(
             productId: product.id,
             productName: product.name,
-            productUnit: product.unit,
-            purchasedController: TextEditingController(),
-            goodStockController: TextEditingController(),
-            recoverableController: TextEditingController(),
-            wasteController: TextEditingController(),
-          ));
-        }
-      });
-    }
+          ),
+        ),
+      );
+    });
   }
 
-  void _removeItem(int index) {
+  Future<void> _addDispatchItems() async {
+    final selected = await _selectProducts({}, selectDispatchDestination: true);
+    if (selected == null || selected.products.isEmpty || !mounted) return;
     setState(() {
-      _items[index].dispose();
-      _items.removeAt(index);
+      _dispatchItems.addAll(
+        selected.products.map(
+          (product) => _DispatchRow(
+            productId: product.id,
+            productName: product.name,
+            dispatchTo: selected.dispatchTo!,
+          ),
+        ),
+      );
+    });
+  }
+
+  Future<void> _addDamageItems() async {
+    final unavailable = <String>{};
+    for (final product in _products) {
+      final sources = _damageItems
+          .where((item) => item.productId == product.id)
+          .map((item) => item.damageBy)
+          .toSet();
+      if (sources.length == 2) unavailable.add(product.id);
+    }
+    final selected = await _selectProducts(
+      unavailable,
+      selectDamageSource: true,
+    );
+    if (selected == null || selected.products.isEmpty || !mounted) return;
+    setState(() {
+      _damageItems.addAll(
+        selected.products.map(
+          (product) => _DamageRow(
+            productId: product.id,
+            productName: product.name,
+            damageBy: selected.damageBy!,
+          ),
+        ),
+      );
     });
   }
 
@@ -243,15 +289,10 @@ class _InventoryFormScreenState extends ConsumerState<InventoryFormScreen> {
   Widget build(BuildContext context) {
     if (_loading) {
       return Scaffold(
-        appBar: AppBar(
-          title: Text(isEdit ? 'Edit Record' : 'New Record'),
-          backgroundColor: Colors.green[800],
-          foregroundColor: Colors.white,
-        ),
+        appBar: AppBar(title: Text(isEdit ? 'Edit Record' : 'New Record')),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
-
     return Scaffold(
       appBar: AppBar(
         title: Text(isEdit ? 'Edit Record' : 'New Record'),
@@ -259,175 +300,284 @@ class _InventoryFormScreenState extends ConsumerState<InventoryFormScreen> {
         foregroundColor: Colors.white,
         actions: [
           TextButton(
-            onPressed: _saving ? null : _save,
+            onPressed: _saving || _readOnly ? null : _save,
             child: _saving
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : const Text('Save', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Text('Save', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
       body: Form(
         key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            _buildHeaderFields(),
-            const SizedBox(height: 16),
-            _buildProductsSection(),
-            const SizedBox(height: 16),
-            if (_items.isNotEmpty) _buildSummaryBar(),
-            const SizedBox(height: 80),
-          ],
+        child: AbsorbPointer(
+          absorbing: _readOnly,
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              if (_readOnly)
+                const Card(
+                  color: Color(0xfffff3e0),
+                  child: Padding(
+                    padding: EdgeInsets.all(12),
+                    child: Text(
+                      'This record is finalized. Unfinalize it before editing.',
+                    ),
+                  ),
+                ),
+              _buildHeader(),
+              const SizedBox(height: 12),
+              _buildPurchasingSection(),
+              const SizedBox(height: 12),
+              _buildDispatchSection(),
+              const SizedBox(height: 12),
+              _buildDamageSection(),
+              const SizedBox(height: 80),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildHeaderFields() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            TextFormField(
-              controller: _titleController,
-              decoration: const InputDecoration(
-                labelText: 'Title *',
-                hintText: 'e.g. Morning Purchase',
-                border: OutlineInputBorder(),
+  Widget _buildHeader() => Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              TextFormField(
+                controller: _titleController,
+                decoration: const InputDecoration(
+                  labelText: 'Title (optional)',
+                  border: OutlineInputBorder(),
+                ),
               ),
-              validator: (v) => (v == null || v.trim().length < 2) ? 'Title required (min 2 chars)' : null,
+              const SizedBox(height: 12),
+              InkWell(
+                onTap: _pickDate,
+                child: InputDecorator(
+                  decoration: const InputDecoration(
+                    labelText: 'Date *',
+                    border: OutlineInputBorder(),
+                    suffixIcon: Icon(Icons.calendar_today),
+                  ),
+                  child: Text(DateFormat('dd MMM yyyy').format(_selectedDate)),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _notesController,
+                maxLines: 2,
+                decoration: const InputDecoration(
+                  labelText: 'Notes',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+
+  Widget _buildPurchasingSection() => _SectionCard(
+        title: 'Purchasing',
+        subtitle:
+            '${_batches.length} batches • ₹${_purchasingGrandTotal.toStringAsFixed(2)}',
+        initiallyExpanded: true,
+        child: Column(
+          children: [
+            ..._batches.asMap().entries.map(
+                  (entry) => _buildBatch(entry.key, entry.value),
+                ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: FilledButton.icon(
+                onPressed: () => setState(
+                  () => _batches.add(_PurchasingBatchRow()),
+                ),
+                icon: const Icon(Icons.add),
+                label: const Text('Add Batch'),
+              ),
             ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: InkWell(
-                    onTap: _pickDate,
-                    child: InputDecorator(
-                      decoration: const InputDecoration(
-                        labelText: 'Date *',
-                        border: OutlineInputBorder(),
-                        suffixIcon: Icon(Icons.calendar_today),
-                      ),
-                      child: Text(DateFormat('dd MMM yyyy').format(_selectedDate)),
+          ],
+        ),
+      );
+
+  Widget _buildBatch(int batchIndex, _PurchasingBatchRow batch) => Card(
+        color: Colors.grey[50],
+        margin: const EdgeInsets.only(bottom: 12),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(
+                    'Batch ${batchIndex + 1}',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    onPressed: () => setState(() {
+                      batch.dispose();
+                      _batches.removeAt(batchIndex);
+                    }),
+                    icon: const Icon(Icons.close, color: Colors.red),
+                  ),
+                ],
+              ),
+              _SourceSelector(
+                label: 'Purchase source',
+                value: batch.purchaseSource,
+                onChanged: (value) =>
+                    setState(() => batch.purchaseSource = value),
+              ),
+              const SizedBox(height: 8),
+              ...batch.items.asMap().entries.map(
+                    (entry) => _PurchasingItemCard(
+                      item: entry.value,
+                      onChanged: () => setState(() {}),
+                      onRemove: () => setState(() {
+                        entry.value.dispose();
+                        batch.items.removeAt(entry.key);
+                      }),
                     ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: DropdownButtonFormField<String>(
-                    initialValue: _purchasedById,
-                    isExpanded: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Purchased By',
-                      border: OutlineInputBorder(),
+              OutlinedButton.icon(
+                onPressed: () => _addPurchasingItems(batchIndex),
+                icon: const Icon(Icons.add),
+                label: const Text('Add Product'),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: _NumberField(
+                      label: 'Transportation ₹',
+                      controller: batch.transportation,
+                      onChanged: () => setState(() {}),
                     ),
-                    items: [
-                      const DropdownMenuItem(value: null, child: Text('None')),
-                      const DropdownMenuItem(
-                        value: _kPurchasedByMe,
-                        child: Text('Me'),
-                      ),
-                      ..._clients.map((c) => DropdownMenuItem(
-                        value: c.id,
-                        child: Text(c.displayName, overflow: TextOverflow.ellipsis),
-                      )),
-                    ],
-                    onChanged: (v) => setState(() {
-                      _purchasedById = v;
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _NumberField(
+                      label: 'Other charges ₹',
+                      controller: batch.otherCharges,
+                      onChanged: () => setState(() {}),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 16,
+                runSpacing: 4,
+                children: [
+                  Text('Items: ₹${batch.totalAmount.toStringAsFixed(2)}'),
+                  Text('Labour: ₹${batch.totalLabour.toStringAsFixed(2)}'),
+                  Text(
+                    'Grand total: ₹${batch.grandTotal.toStringAsFixed(2)}',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+
+  Widget _buildDispatchSection() => _SectionCard(
+        title: 'Dispatch',
+        subtitle:
+            '${_dispatchItems.length} rows • ₹${_dispatchTotal.toStringAsFixed(2)}',
+        child: Column(
+          children: [
+            ..._dispatchItems.asMap().entries.map(
+                  (entry) => _DispatchItemCard(
+                    item: entry.value,
+                    onChanged: () => setState(() {}),
+                    onRemove: () => setState(() {
+                      entry.value.dispose();
+                      _dispatchItems.removeAt(entry.key);
                     }),
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _notesController,
-              decoration: const InputDecoration(
-                labelText: 'Notes',
-                border: OutlineInputBorder(),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: FilledButton.icon(
+                onPressed: _addDispatchItems,
+                icon: const Icon(Icons.add),
+                label: const Text('Add Dispatch'),
               ),
-              maxLines: 2,
             ),
+            if (_dispatchItems.isNotEmpty)
+              Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  'Total: ₹${_dispatchTotal.toStringAsFixed(2)}',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
           ],
         ),
-      ),
-    );
-  }
+      );
 
-  Widget _buildProductsSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text('Products (${_items.length})', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
-            FilledButton.icon(
-              onPressed: _addProduct,
-              icon: const Icon(Icons.add, size: 18),
-              label: const Text('Add Product'),
-              style: FilledButton.styleFrom(backgroundColor: Colors.green[700]),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        if (_items.isEmpty)
-          const Card(
-            child: Padding(
-              padding: EdgeInsets.all(24),
-              child: Center(child: Text('No products added yet. Tap "Add Product" to start.')),
-            ),
-          )
-        else
-          ..._items.asMap().entries.map((entry) => _ProductRowCard(
-            index: entry.key,
-            item: entry.value,
-            onRemove: () => _removeItem(entry.key),
-            onChanged: () => setState(() {}),
-          )),
-      ],
-    );
-  }
-
-  Widget _buildSummaryBar() {
-    double totalPurchased = 0, totalGood = 0, totalRecover = 0, totalWaste = 0;
-    for (final item in _items) {
-      totalPurchased += item.purchasedQty;
-      totalGood += item.goodStock;
-      totalRecover += item.recoverable;
-      totalWaste += item.waste;
-    }
-    final wastePct = totalPurchased > 0 ? (totalWaste / totalPurchased * 100) : 0.0;
-
-    return Card(
-      color: Colors.green[50],
-      child: Padding(
-        padding: const EdgeInsets.all(12),
+  Widget _buildDamageSection() => _SectionCard(
+        title: 'Damage',
+        subtitle:
+            '${_damageItems.length} rows • ${_damageTotal.toStringAsFixed(2)} kg',
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Summary', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 12,
-              runSpacing: 4,
-              children: [
-                Text('Purchased: ${totalPurchased.toStringAsFixed(1)} kg', style: const TextStyle(fontSize: 12)),
-                Text('Good: ${totalGood.toStringAsFixed(1)} kg', style: const TextStyle(fontSize: 12, color: Colors.green)),
-                Text('Recoverable: ${totalRecover.toStringAsFixed(1)} kg', style: const TextStyle(fontSize: 12, color: Colors.orange)),
-                Text('Waste: ${totalWaste.toStringAsFixed(1)} kg (${wastePct.toStringAsFixed(1)}%)', style: const TextStyle(fontSize: 12, color: Colors.red)),
-              ],
+            ..._damageItems.asMap().entries.map(
+                  (entry) => _DamageItemCard(
+                    item: entry.value,
+                    onChanged: () => setState(() {}),
+                    onRemove: () => setState(() {
+                      entry.value.dispose();
+                      _damageItems.removeAt(entry.key);
+                    }),
+                  ),
+                ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: FilledButton.icon(
+                onPressed: _addDamageItems,
+                icon: const Icon(Icons.add),
+                label: const Text('Add Damage'),
+              ),
             ),
+            if (_damageItems.isNotEmpty)
+              Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  'Damage: ${_damageTotal.toStringAsFixed(2)} kg • '
+                  'Recovered: ${_recoverTotal.toStringAsFixed(2)} kg • '
+                  'Waste: ${_wasteTotal.toStringAsFixed(2)} kg',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
           ],
         ),
-      ),
-    );
-  }
+      );
 
-  void _pickDate() async {
+  double get _purchasingGrandTotal =>
+      _batches.fold(0, (sum, batch) => sum + batch.grandTotal);
+  double get _dispatchTotal =>
+      _dispatchItems.fold(0, (sum, item) => sum + item.amount);
+  double get _damageTotal =>
+      _damageItems.fold(0, (sum, item) => sum + item.damageQty);
+  double get _recoverTotal =>
+      _damageItems.fold(0, (sum, item) => sum + item.recoverQty);
+  double get _wasteTotal =>
+      _damageItems.fold(0, (sum, item) => sum + item.wasteQty);
+
+  Future<void> _pickDate() async {
     final picked = await showDatePicker(
       context: context,
       initialDate: _selectedDate,
@@ -438,218 +588,491 @@ class _InventoryFormScreenState extends ConsumerState<InventoryFormScreen> {
   }
 }
 
-// ─── Item row model ─────────────────────────────────────────────────────────
+class _PurchasingBatchRow {
+  final String? id;
+  String purchaseSource;
+  final TextEditingController transportation;
+  final TextEditingController otherCharges;
+  final List<_PurchasingRow> items;
 
-class _ItemRow {
-  final String productId;
-  final String productName;
-  final String productUnit;
-  final TextEditingController purchasedController;
-  final TextEditingController goodStockController;
-  final TextEditingController recoverableController;
-  final TextEditingController wasteController;
+  _PurchasingBatchRow({
+    this.id,
+    this.purchaseSource = 'om',
+    TextEditingController? transportation,
+    TextEditingController? otherCharges,
+    List<_PurchasingRow>? items,
+  })  : transportation = transportation ?? TextEditingController(text: '0'),
+        otherCharges = otherCharges ?? TextEditingController(text: '0'),
+        items = items ?? [];
 
-  /// Once the user edits Good / Recoverable / Waste, stop auto-syncing Good from Purchased.
-  bool breakdownTouched;
+  double get totalAmount => items.fold(0, (sum, item) => sum + item.amount);
+  double get totalLabour =>
+      items.fold(0, (sum, item) => sum + item.labourCharge);
+  double get grandTotal =>
+      totalAmount +
+      totalLabour +
+      _double(transportation.text) +
+      _double(otherCharges.text);
 
-  _ItemRow({
-    required this.productId,
-    required this.productName,
-    required this.productUnit,
-    required this.purchasedController,
-    required this.goodStockController,
-    required this.recoverableController,
-    required this.wasteController,
-    this.breakdownTouched = false,
-  });
-
-  double get purchasedQty => double.tryParse(purchasedController.text) ?? 0;
-  double get goodStock => double.tryParse(goodStockController.text) ?? 0;
-  double get recoverable => double.tryParse(recoverableController.text) ?? 0;
-  double get waste => double.tryParse(wasteController.text) ?? 0;
-
-  double get sum => goodStock + recoverable + waste;
-  double get difference => purchasedQty - sum;
-  bool get isBalanced => purchasedQty > 0 && difference.abs() < 0.01;
-
-  /// Copy Purchased → Good only until the user edits the breakdown fields.
-  void autofillGoodFromPurchased() {
-    if (purchasedQty <= 0 || breakdownTouched) return;
-
-    final text = purchasedQty == purchasedQty.truncateToDouble()
-        ? purchasedQty.toInt().toString()
-        : purchasedQty.toStringAsFixed(2);
-    if (goodStockController.text != text) {
-      goodStockController.text = text;
-      goodStockController.selection = TextSelection.collapsed(offset: text.length);
-    }
-  }
+  Map<String, dynamic> toJson() => {
+        if (id != null) 'id': id,
+        'purchase_source': purchaseSource,
+        'transportation_charge': _double(transportation.text),
+        'other_charges': _double(otherCharges.text),
+        'items': items.map((item) => item.toJson()).toList(),
+      };
 
   void dispose() {
-    purchasedController.dispose();
-    goodStockController.dispose();
-    recoverableController.dispose();
-    wasteController.dispose();
+    transportation.dispose();
+    otherCharges.dispose();
+    for (final item in items) {
+      item.dispose();
+    }
   }
 }
 
-// ─── Product row card widget ────────────────────────────────────────────────
+class _PurchasingRow {
+  final String? id;
+  final String productId;
+  final String productName;
+  final TextEditingController weight;
+  final TextEditingController rate;
+  final TextEditingController labour;
 
-class _ProductRowCard extends StatelessWidget {
-  final int index;
-  final _ItemRow item;
-  final VoidCallback onRemove;
+  _PurchasingRow({
+    this.id,
+    required this.productId,
+    required this.productName,
+    TextEditingController? weight,
+    TextEditingController? rate,
+    TextEditingController? labour,
+  })  : weight = weight ?? TextEditingController(),
+        rate = rate ?? TextEditingController(text: '0'),
+        labour = labour ?? TextEditingController(text: '0');
+
+  double get amount => _double(weight.text) * _double(rate.text);
+  double get labourCharge => _double(labour.text);
+
+  Map<String, dynamic> toJson() => {
+        if (id != null) 'id': id,
+        'product_id': productId,
+        'weight': _double(weight.text),
+        'rate': _double(rate.text),
+        'labour_charge': labourCharge,
+      };
+
+  void dispose() {
+    weight.dispose();
+    rate.dispose();
+    labour.dispose();
+  }
+}
+
+class _DispatchRow {
+  final String? id;
+  final String productId;
+  final String productName;
+  final String dispatchTo;
+  final TextEditingController pocket;
+  final TextEditingController weight;
+  final TextEditingController rate;
+
+  _DispatchRow({
+    this.id,
+    required this.productId,
+    required this.productName,
+    required this.dispatchTo,
+    TextEditingController? pocket,
+    TextEditingController? weight,
+    TextEditingController? rate,
+  })  : pocket = pocket ?? TextEditingController(text: '0'),
+        weight = weight ?? TextEditingController(),
+        rate = rate ?? TextEditingController(text: '0');
+
+  double get amount => _double(weight.text) * _double(rate.text);
+
+  Map<String, dynamic> toJson() => {
+        if (id != null) 'id': id,
+        'product_id': productId,
+        'dispatch_to': dispatchTo,
+        'pocket': int.tryParse(pocket.text) ?? 0,
+        'weight': _double(weight.text),
+        'rate': _double(rate.text),
+      };
+
+  void dispose() {
+    pocket.dispose();
+    weight.dispose();
+    rate.dispose();
+  }
+}
+
+class _DamageRow {
+  final String? id;
+  final String productId;
+  final String productName;
+  String damageBy;
+  final TextEditingController damage;
+  final TextEditingController recover;
+
+  _DamageRow({
+    this.id,
+    required this.productId,
+    required this.productName,
+    this.damageBy = 'om',
+    TextEditingController? damage,
+    TextEditingController? recover,
+  })  : damage = damage ?? TextEditingController(),
+        recover = recover ?? TextEditingController(text: '0');
+
+  double get damageQty => _double(damage.text);
+  double get recoverQty => _double(recover.text);
+  double get wasteQty => damageQty - recoverQty;
+
+  Map<String, dynamic> toJson() => {
+        if (id != null) 'id': id,
+        'product_id': productId,
+        'damage_by': damageBy,
+        'damage_qty': damageQty,
+        'recover_qty': recoverQty,
+      };
+
+  void dispose() {
+    damage.dispose();
+    recover.dispose();
+  }
+}
+
+class _PurchasingItemCard extends StatelessWidget {
+  final _PurchasingRow item;
   final VoidCallback onChanged;
+  final VoidCallback onRemove;
 
-  const _ProductRowCard({
-    required this.index,
+  const _PurchasingItemCard({
     required this.item,
-    required this.onRemove,
     required this.onChanged,
+    required this.onRemove,
   });
 
   @override
-  Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '${index + 1}. ${item.productName} (${item.productUnit})',
-                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                  ),
+  Widget build(BuildContext context) => _RowCard(
+        title: item.productName,
+        onRemove: onRemove,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _NumberField(
+                  label: 'Weight kg *',
+                  controller: item.weight,
+                  positive: true,
+                  onChanged: onChanged,
                 ),
-                IconButton(
-                  icon: const Icon(Icons.close, size: 18, color: Colors.red),
-                  onPressed: onRemove,
-                  visualDensity: VisualDensity.compact,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _NumberField(
+                  label: 'Rate ₹/kg',
+                  controller: item.rate,
+                  onChanged: onChanged,
                 ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                _QtyField(
-                  label: 'Purchased',
-                  controller: item.purchasedController,
-                  onChanged: () {
-                    item.autofillGoodFromPurchased();
-                    onChanged();
-                  },
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _NumberField(
+                  label: 'Labour ₹',
+                  controller: item.labour,
+                  onChanged: onChanged,
                 ),
-                const SizedBox(width: 8),
-                _QtyField(
-                  label: 'Good Stock',
-                  controller: item.goodStockController,
-                  onChanged: () {
-                    item.breakdownTouched = true;
-                    onChanged();
-                  },
-                ),
-                const SizedBox(width: 8),
-                _QtyField(
-                  label: 'Recoverable',
-                  controller: item.recoverableController,
-                  onChanged: () {
-                    item.breakdownTouched = true;
-                    onChanged();
-                  },
-                ),
-                const SizedBox(width: 8),
-                _QtyField(
-                  label: 'Waste',
-                  controller: item.wasteController,
-                  onChanged: () {
-                    item.breakdownTouched = true;
-                    onChanged();
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            _BalanceIndicator(item: item),
-          ],
-        ),
-      ),
-    );
-  }
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text('Amount: ₹${item.amount.toStringAsFixed(2)}'),
+        ],
+      );
 }
 
-class _QtyField extends StatelessWidget {
-  final String label;
-  final TextEditingController controller;
+class _DispatchItemCard extends StatelessWidget {
+  final _DispatchRow item;
   final VoidCallback onChanged;
+  final VoidCallback onRemove;
 
-  const _QtyField({required this.label, required this.controller, required this.onChanged});
+  const _DispatchItemCard({
+    required this.item,
+    required this.onChanged,
+    required this.onRemove,
+  });
 
   @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: TextField(
+  Widget build(BuildContext context) => _RowCard(
+        title: '${item.productName} • ${_dispatchLabel(item.dispatchTo)}',
+        onRemove: onRemove,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _NumberField(
+                  label: 'Pocket',
+                  controller: item.pocket,
+                  integer: true,
+                  onChanged: onChanged,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _NumberField(
+                  label: 'Weight kg *',
+                  controller: item.weight,
+                  positive: true,
+                  onChanged: onChanged,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _NumberField(
+                  label: 'Rate ₹/kg',
+                  controller: item.rate,
+                  onChanged: onChanged,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text('Amount: ₹${item.amount.toStringAsFixed(2)}'),
+        ],
+      );
+}
+
+class _DamageItemCard extends StatelessWidget {
+  final _DamageRow item;
+  final VoidCallback onChanged;
+  final VoidCallback onRemove;
+
+  const _DamageItemCard({
+    required this.item,
+    required this.onChanged,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) => _RowCard(
+        title: item.productName,
+        onRemove: onRemove,
+        children: [
+          _SourceSelector(
+            label: 'Damage by',
+            value: item.damageBy,
+            onChanged: (value) {
+              item.damageBy = value;
+              onChanged();
+            },
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _NumberField(
+                  label: 'Damage kg *',
+                  controller: item.damage,
+                  positive: true,
+                  onChanged: onChanged,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextFormField(
+                  controller: item.recover,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(
+                    labelText: 'Recover kg',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  validator: (value) {
+                    final recover = _double(value ?? '');
+                    if (recover < 0) return 'Must be ≥ 0';
+                    if (recover > item.damageQty) return 'Exceeds damage';
+                    return null;
+                  },
+                  onChanged: (_) => onChanged(),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: InputDecorator(
+                  decoration: const InputDecoration(
+                    labelText: 'Waste kg',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  child: Text(item.wasteQty.toStringAsFixed(2)),
+                ),
+              ),
+            ],
+          ),
+        ],
+      );
+}
+
+class _SectionCard extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final Widget child;
+  final bool initiallyExpanded;
+
+  const _SectionCard({
+    required this.title,
+    required this.subtitle,
+    required this.child,
+    this.initiallyExpanded = false,
+  });
+
+  @override
+  Widget build(BuildContext context) => Card(
+        child: ExpansionTile(
+          initiallyExpanded: initiallyExpanded,
+          title: Text(
+            title,
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          subtitle: Text(subtitle),
+          childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          children: [child],
+        ),
+      );
+}
+
+class _RowCard extends StatelessWidget {
+  final String title;
+  final VoidCallback onRemove;
+  final List<Widget> children;
+
+  const _RowCard({
+    required this.title,
+    required this.onRemove,
+    required this.children,
+  });
+
+  @override
+  Widget build(BuildContext context) => Card(
+        margin: const EdgeInsets.only(bottom: 8),
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: onRemove,
+                    icon: const Icon(Icons.close, color: Colors.red),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ],
+              ),
+              ...children,
+            ],
+          ),
+        ),
+      );
+}
+
+class _NumberField extends StatelessWidget {
+  final String label;
+  final TextEditingController controller;
+  final bool positive;
+  final bool integer;
+  final VoidCallback onChanged;
+
+  const _NumberField({
+    required this.label,
+    required this.controller,
+    required this.onChanged,
+    this.positive = false,
+    this.integer = false,
+  });
+
+  @override
+  Widget build(BuildContext context) => TextFormField(
         controller: controller,
-        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        keyboardType: TextInputType.numberWithOptions(decimal: !integer),
         decoration: InputDecoration(
           labelText: label,
           border: const OutlineInputBorder(),
           isDense: true,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
         ),
-        style: const TextStyle(fontSize: 13),
+        validator: (value) {
+          final number = integer
+              ? int.tryParse(value ?? '')
+              : double.tryParse(value ?? '');
+          if (number == null) return 'Required';
+          if (positive && number <= 0) return 'Must be > 0';
+          if (!positive && number < 0) return 'Must be ≥ 0';
+          return null;
+        },
         onChanged: (_) => onChanged(),
-      ),
-    );
-  }
+      );
 }
 
-class _BalanceIndicator extends StatelessWidget {
-  final _ItemRow item;
-  const _BalanceIndicator({required this.item});
+class _SourceSelector extends StatelessWidget {
+  final String label;
+  final String value;
+  final ValueChanged<String> onChanged;
+
+  const _SourceSelector({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
 
   @override
-  Widget build(BuildContext context) {
-    if (item.purchasedQty == 0 && item.sum == 0) {
-      return const Text('Enter quantities', style: TextStyle(fontSize: 11, color: Colors.grey));
-    }
-
-    if (item.isBalanced) {
-      return Row(
+  Widget build(BuildContext context) => Row(
         children: [
-          const Icon(Icons.check_circle, size: 14, color: Colors.green),
-          const SizedBox(width: 4),
-          Text(
-            '${item.goodStock.toStringAsFixed(1)} + ${item.recoverable.toStringAsFixed(1)} + ${item.waste.toStringAsFixed(1)} = ${item.sum.toStringAsFixed(1)}',
-            style: const TextStyle(fontSize: 11, color: Colors.green),
+          Text('$label: '),
+          const SizedBox(width: 8),
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(value: 'om', label: Text('Om')),
+              ButtonSegment(value: 'quicklo', label: Text('Quicklo')),
+            ],
+            selected: {value},
+            showSelectedIcon: false,
+            onSelectionChanged: (values) => onChanged(values.first),
           ),
         ],
       );
-    }
-
-    return Row(
-      children: [
-        const Icon(Icons.info_outline, size: 14, color: Colors.orange),
-        const SizedBox(width: 4),
-        Flexible(
-          child: Text(
-            '${item.sum.toStringAsFixed(1)} ≠ ${item.purchasedQty.toStringAsFixed(1)} (off by ${item.difference.abs().toStringAsFixed(1)})',
-            style: const TextStyle(fontSize: 11, color: Colors.orange),
-          ),
-        ),
-      ],
-    );
-  }
 }
 
-// ─── Product selector bottom sheet ──────────────────────────────────────────
+class _ProductSelection {
+  final List<ProductSummary> products;
+  final String? dispatchTo;
+  final String? damageBy;
+
+  const _ProductSelection(
+    this.products, {
+    this.dispatchTo,
+    this.damageBy,
+  });
+}
 
 class _ProductSelector extends StatefulWidget {
   final List<ProductSummary> available;
-  const _ProductSelector({required this.available});
+  final bool selectDispatchDestination;
+  final bool selectDamageSource;
+
+  const _ProductSelector({
+    required this.available,
+    this.selectDispatchDestination = false,
+    this.selectDamageSource = false,
+  });
 
   @override
   State<_ProductSelector> createState() => _ProductSelectorState();
@@ -657,85 +1080,162 @@ class _ProductSelector extends StatefulWidget {
 
 class _ProductSelectorState extends State<_ProductSelector> {
   final _searchController = TextEditingController();
+  final _dispatchToController = TextEditingController();
   final Set<String> _selected = {};
   String _filter = '';
+  String _damageBy = 'om';
 
   @override
   void dispose() {
     _searchController.dispose();
+    _dispatchToController.dispose();
     super.dispose();
-  }
-
-  List<ProductSummary> get _filtered {
-    if (_filter.isEmpty) return widget.available;
-    return widget.available
-        .where((p) => p.name.toLowerCase().contains(_filter.toLowerCase()))
-        .toList();
   }
 
   @override
   Widget build(BuildContext context) {
+    final products = widget.available
+        .where(
+          (product) =>
+              product.name.toLowerCase().contains(_filter.toLowerCase()),
+        )
+        .toList();
     return DraggableScrollableSheet(
       initialChildSize: 0.7,
       minChildSize: 0.4,
       maxChildSize: 0.9,
       expand: false,
-      builder: (ctx, scrollController) => Column(
+      builder: (context, scrollController) => Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                const Expanded(child: Text('Select Products', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16))),
+                const Expanded(
+                  child: Text(
+                    'Select Products',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
                 TextButton(
-                  onPressed: _selected.isEmpty ? null : () {
-                    final selectedProducts = widget.available.where((p) => _selected.contains(p.id)).toList();
-                    Navigator.pop(context, selectedProducts);
-                  },
+                  onPressed: _selected.isEmpty ||
+                          (widget.selectDispatchDestination &&
+                              _dispatchToController.text.trim().isEmpty)
+                      ? null
+                      : () => Navigator.pop(
+                            context,
+                            _ProductSelection(
+                              widget.available
+                                  .where(
+                                    (product) => _selected.contains(product.id),
+                                  )
+                                  .toList(),
+                              dispatchTo: widget.selectDispatchDestination
+                                  ? _dispatchToController.text.trim()
+                                  : null,
+                              damageBy:
+                                  widget.selectDamageSource ? _damageBy : null,
+                            ),
+                          ),
                   child: Text('Add (${_selected.length})'),
                 ),
               ],
             ),
           ),
+          if (widget.selectDispatchDestination)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: TextField(
+                controller: _dispatchToController,
+                maxLength: 100,
+                decoration: const InputDecoration(
+                  labelText: 'Dispatch to',
+                  hintText: 'Enter destination',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.local_shipping_outlined),
+                ),
+                onChanged: (_) => setState(() {}),
+              ),
+            ),
+          if (widget.selectDamageSource)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Damage by',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      for (final value in const ['om', 'quicklo'])
+                        ChoiceChip(
+                          label: Text(value == 'om' ? 'Om' : 'Quicklo'),
+                          selected: _damageBy == value,
+                          onSelected: (_) => setState(() => _damageBy = value),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: TextField(
               controller: _searchController,
-              decoration: InputDecoration(
-                hintText: 'Search product...',
-                prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                isDense: true,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: const InputDecoration(
+                hintText: 'Search product',
+                prefixIcon: Icon(Icons.search),
+                border: OutlineInputBorder(),
               ),
-              onChanged: (v) => setState(() => _filter = v),
+              onChanged: (value) => setState(() => _filter = value),
             ),
           ),
           const SizedBox(height: 8),
           Expanded(
-            child: ListView.builder(
-              controller: scrollController,
-              itemCount: _filtered.length,
-              itemBuilder: (ctx, i) {
-                final product = _filtered[i];
-                final isSelected = _selected.contains(product.id);
-                return CheckboxListTile(
-                  value: isSelected,
-                  title: Text('${product.name} (${product.unit})', style: const TextStyle(fontSize: 14)),
-                  dense: true,
-                  onChanged: (v) => setState(() {
-                    if (v == true) {
-                      _selected.add(product.id);
-                    } else {
-                      _selected.remove(product.id);
-                    }
-                  }),
-                );
-              },
-            ),
+            child: products.isEmpty
+                ? const Center(child: Text('No products available'))
+                : ListView.builder(
+                    controller: scrollController,
+                    itemCount: products.length,
+                    itemBuilder: (context, index) {
+                      final product = products[index];
+                      return CheckboxListTile(
+                        value: _selected.contains(product.id),
+                        title: Text('${product.name} (${product.unit})'),
+                        onChanged: (selected) => setState(() {
+                          if (selected == true) {
+                            _selected.add(product.id);
+                          } else {
+                            _selected.remove(product.id);
+                          }
+                        }),
+                      );
+                    },
+                  ),
           ),
         ],
       ),
     );
   }
+}
+
+double _double(String value) => double.tryParse(value.trim()) ?? 0;
+
+String _dispatchLabel(String value) => switch (value) {
+      'quicklo_part_2' => 'Quicklo Part 2',
+      'quicklo_part_3' => 'Quicklo Part 3',
+      'quicklo_part_1' => 'Quicklo Part 1',
+      _ => value,
+    };
+
+String? _nullable(String value) {
+  final trimmed = value.trim();
+  return trimmed.isEmpty ? null : trimmed;
 }

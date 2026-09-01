@@ -10,7 +10,8 @@ class InventoryHomeScreen extends ConsumerStatefulWidget {
   const InventoryHomeScreen({super.key});
 
   @override
-  ConsumerState<InventoryHomeScreen> createState() => _InventoryHomeScreenState();
+  ConsumerState<InventoryHomeScreen> createState() =>
+      _InventoryHomeScreenState();
 }
 
 class _InventoryHomeScreenState extends ConsumerState<InventoryHomeScreen> {
@@ -31,7 +32,8 @@ class _InventoryHomeScreenState extends ConsumerState<InventoryHomeScreen> {
   }
 
   void _onScroll() {
-    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
       ref.read(inventoryListProvider.notifier).nextPage();
     }
   }
@@ -70,12 +72,14 @@ class _InventoryHomeScreenState extends ConsumerState<InventoryHomeScreen> {
               data: (state) => state.records.isEmpty
                   ? const Center(child: Text('No inventory records found'))
                   : RefreshIndicator(
-                      onRefresh: () => ref.read(inventoryListProvider.notifier).refresh(),
+                      onRefresh: () =>
+                          ref.read(inventoryListProvider.notifier).refresh(),
                       child: ListView.builder(
                         controller: _scrollController,
                         padding: const EdgeInsets.only(bottom: 80),
                         itemCount: state.records.length,
-                        itemBuilder: (ctx, i) => _RecordCard(record: state.records[i]),
+                        itemBuilder: (ctx, i) =>
+                            _RecordCard(record: state.records[i]),
                       ),
                     ),
             ),
@@ -109,7 +113,8 @@ class _SearchBar extends ConsumerWidget {
                 )
               : null,
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           isDense: true,
         ),
         onSubmitted: (v) => ref.read(inventoryListProvider.notifier).search(v),
@@ -129,13 +134,17 @@ class _FilterChips extends ConsumerWidget {
           FilterChip(
             label: const Text('Draft'),
             selected: state?.statusFilter == 'draft',
-            onSelected: (v) => ref.read(inventoryListProvider.notifier).setStatusFilter(v ? 'draft' : null),
+            onSelected: (v) => ref
+                .read(inventoryListProvider.notifier)
+                .setStatusFilter(v ? 'draft' : null),
           ),
           const SizedBox(width: 8),
           FilterChip(
             label: const Text('Finalized'),
             selected: state?.statusFilter == 'finalized',
-            onSelected: (v) => ref.read(inventoryListProvider.notifier).setStatusFilter(v ? 'finalized' : null),
+            onSelected: (v) => ref
+                .read(inventoryListProvider.notifier)
+                .setStatusFilter(v ? 'finalized' : null),
           ),
           const SizedBox(width: 8),
           FilterChip(
@@ -176,39 +185,51 @@ class _RecordCard extends StatelessWidget {
               Row(
                 children: [
                   Expanded(
-                    child: Text(record.title,
-                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                    child: Text(record.displayTitle,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 15)),
                   ),
-                  Text(dateStr, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                  Text(dateStr,
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600])),
                 ],
               ),
-              if (record.purchasedByName != null) ...[
-                const SizedBox(height: 4),
-                Text('Purchased By: ${record.purchasedByName}',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[700])),
-              ],
               const SizedBox(height: 8),
               const Divider(height: 1),
               const SizedBox(height: 8),
               Row(
                 children: [
-                  _Stat('Products', '${record.itemCount}'),
-                  _Stat('Purchased', '${record.totalPurchasedQty.toStringAsFixed(0)} kg'),
+                  _Stat('Purchase batches', '${record.purchasingBatchCount}'),
+                  _Stat('Rows', '${record.totalRowCount}'),
                 ],
               ),
               const SizedBox(height: 4),
               Row(
                 children: [
-                  _Stat('Good', '${record.totalGoodStock.toStringAsFixed(0)} kg', color: Colors.green),
-                  _Stat('Recoverable', '${record.totalRecoverable.toStringAsFixed(0)} kg', color: Colors.orange),
-                  _Stat('Waste', '${record.totalFinalWaste.toStringAsFixed(0)} kg', color: Colors.red),
+                  _Stat(
+                    'Purchase',
+                    '${record.totalPurchasedWeight.toStringAsFixed(1)} kg • '
+                        '₹${record.purchasingGrandTotal.toStringAsFixed(0)}',
+                    color: Colors.green,
+                  ),
+                  _Stat(
+                    'Dispatch',
+                    '${record.totalDispatchWeight.toStringAsFixed(1)} kg • '
+                        '₹${record.totalDispatchAmount.toStringAsFixed(0)}',
+                    color: Colors.blue,
+                  ),
+                  _Stat(
+                    'Waste',
+                    '${record.totalWasteQty.toStringAsFixed(1)} kg',
+                    color: Colors.red,
+                  ),
                 ],
               ),
               const SizedBox(height: 6),
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
                       color: record.isDraft
                           ? Colors.orange.withValues(alpha: 0.1)
@@ -220,25 +241,24 @@ class _RecordCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w500,
-                        color: record.isDraft ? Colors.orange[800] : Colors.green[800],
+                        color: record.isDraft
+                            ? Colors.orange[800]
+                            : Colors.green[800],
                       ),
                     ),
                   ),
                   const Spacer(),
-                  if (record.wastePercentage > 0)
-                    Text(
-                      'Waste: ${record.wastePercentage.toStringAsFixed(1)}%',
-                      style: TextStyle(fontSize: 11, color: Colors.red[700]),
+                  if (record.isDraft)
+                    TextButton(
+                      onPressed: () =>
+                          context.push('/inventory-mgmt/${record.id}/edit'),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: const Text('Edit'),
                     ),
-                  TextButton(
-                    onPressed: () => context.push('/inventory-mgmt/${record.id}/edit'),
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    child: const Text('Edit'),
-                  ),
                 ],
               ),
             ],

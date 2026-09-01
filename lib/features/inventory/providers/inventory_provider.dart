@@ -2,7 +2,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/models/inventory_record.dart';
 import '../data/repositories/inventory_repository.dart';
 
-final inventoryRepositoryProvider = Provider<InventoryRepository>((ref) => InventoryRepository());
+final inventoryRepositoryProvider =
+    Provider<InventoryRepository>((ref) => InventoryRepository());
 
 // ─── List state ───────────────────────────────────────────────────────────────
 
@@ -56,7 +57,8 @@ class InventoryListNotifier extends AsyncNotifier<InventoryListState> {
   @override
   Future<InventoryListState> build() async => _fetch(page: 1);
 
-  Future<InventoryListState> _fetch({int page = 1, InventoryListState? prev}) async {
+  Future<InventoryListState> _fetch(
+      {int page = 1, InventoryListState? prev}) async {
     final repo = ref.read(inventoryRepositoryProvider);
     final result = await repo.list(
       search: prev?.search,
@@ -134,11 +136,13 @@ class InventoryListNotifier extends AsyncNotifier<InventoryListState> {
 
 // ─── Detail provider ──────────────────────────────────────────────────────────
 
-final inventoryDetailProvider =
-    AsyncNotifierProviderFamily<InventoryDetailNotifier, InventoryRecord, String>(
-        InventoryDetailNotifier.new);
+final inventoryDetailProvider = AsyncNotifierProviderFamily<
+    InventoryDetailNotifier,
+    InventoryRecord,
+    String>(InventoryDetailNotifier.new);
 
-class InventoryDetailNotifier extends FamilyAsyncNotifier<InventoryRecord, String> {
+class InventoryDetailNotifier
+    extends FamilyAsyncNotifier<InventoryRecord, String> {
   @override
   Future<InventoryRecord> build(String id) async {
     return ref.read(inventoryRepositoryProvider).getById(id);
@@ -146,7 +150,8 @@ class InventoryDetailNotifier extends FamilyAsyncNotifier<InventoryRecord, Strin
 
   Future<void> refresh() async {
     state = const AsyncLoading();
-    state = await AsyncValue.guard(() => ref.read(inventoryRepositoryProvider).getById(arg));
+    state = await AsyncValue.guard(
+        () => ref.read(inventoryRepositoryProvider).getById(arg));
   }
 
   Future<void> finalizeRecord() async {

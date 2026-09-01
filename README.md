@@ -43,14 +43,22 @@ The login screen shows **API: …** in debug — confirm it points to production
 **Local backend only** (optional):
 
 ```bash
-# Android emulator
-flutter run --dart-define=API_BASE_URL=http://10.0.2.2:3000
-
-# Physical device (replace with your Mac's LAN IP)
-flutter run --dart-define=API_BASE_URL=http://192.168.1.5:3000
+cp .env.example .env.local
+flutter run --dart-define-from-file=.env.local
 ```
 
-Your Mac must reach Neon DB (internet + valid `DATABASE_URL` in `Backend/.env`) when using a local backend.
+`.env.local` is git-ignored. It defaults to `localhost`, which works for iOS
+simulator, macOS, and web. Use `10.0.2.2` for an Android emulator or your Mac's
+LAN IP for a physical device, as shown in `.env.example`.
+
+Run plain `flutter run` to use the AWS backend again. Your local backend must
+have a working `DATABASE_URL` in `Backend/.env`.
+
+You can also select AWS explicitly:
+
+```bash
+flutter run --dart-define-from-file=.env.production
+```
 
 ## Key features
 

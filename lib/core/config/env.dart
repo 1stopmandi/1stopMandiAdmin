@@ -1,8 +1,9 @@
 /// AWS ECS production API — default for all builds (debug + release).
 ///
 /// Override only for local backend development:
-/// `--dart-define=API_BASE_URL=http://10.0.2.2:3000` (Android emulator)
-/// `--dart-define=API_BASE_URL=http://192.168.1.5:3000` (physical device on LAN)
+/// `flutter run --dart-define-from-file=.env.local`
+/// Explicit AWS build:
+/// `flutter run --dart-define-from-file=.env.production`
 const String productionApiBaseUrl =
     'https://1s-89e678997d014bf3bd82bf5c6d3e78ba.ecs.ap-south-1.on.aws';
 

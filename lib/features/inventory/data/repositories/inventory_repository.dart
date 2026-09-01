@@ -11,7 +11,7 @@ class InventoryRepository {
     String? date,
     String? startDate,
     String? endDate,
-    String? purchasedBy,
+    String? purchaseSource,
     String? status,
     int page = 1,
     int limit = 20,
@@ -27,7 +27,7 @@ class InventoryRepository {
       if (date != null) 'date': date,
       if (startDate != null) 'start_date': startDate,
       if (endDate != null) 'end_date': endDate,
-      if (purchasedBy != null) 'purchased_by': purchasedBy,
+      if (purchaseSource != null) 'purchase_source': purchaseSource,
       if (status != null) 'status': status,
     };
     final res = await _dio.get('/api/inventory-mgmt', queryParameters: params);
@@ -105,7 +105,8 @@ class InventoryRepository {
     if (e.error is ApiException) return e.error as ApiException;
     final data = e.response?.data;
     if (data is Map && data['message'] is String) {
-      return ApiException(data['message'] as String, statusCode: e.response?.statusCode);
+      return ApiException(data['message'] as String,
+          statusCode: e.response?.statusCode);
     }
     return ApiException(fallback, statusCode: e.response?.statusCode);
   }
