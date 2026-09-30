@@ -4,6 +4,10 @@ import 'package:go_router/go_router.dart';
 import '../../providers/employees_provider.dart';
 import '../../../../core/widgets/admin_menu_button.dart';
 import '../../data/models/employee.dart';
+import '../../../../core/network/api_exceptions.dart';
+import '../../../../shared/widgets/empty_state_view.dart';
+import '../../../../shared/widgets/error_view.dart';
+import '../../../../shared/widgets/skeleton_card.dart';
 
 class EmployeesListScreen extends ConsumerStatefulWidget {
   const EmployeesListScreen({super.key});
@@ -106,11 +110,20 @@ class _EmployeesListScreenState extends ConsumerState<EmployeesListScreen> {
           ),
           Expanded(
             child: listAsync.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(child: Text('Error: $e')),
+              loading: () => const ContentSkeleton(type: ContentSkeletonType.list),
+              error: (e, _) => ErrorView(
+                message: friendlyError(e),
+                onRetry: () => ref.read(employeesListProvider.notifier).refresh(),
+              ),
               data: (state) {
                 if (state.employees.isEmpty) {
-                  return const Center(child: Text('No employees found'));
+                  return EmptyStateView(
+                    icon: Icons.badge_outlined,
+                    title: 'No employees found',
+                    subtitle: 'Add an employee or change the active filters.',
+                    actionLabel: 'Add employee',
+                    onAction: () => context.push('/employees/new'),
+                  );
                 }
                 return RefreshIndicator(
                   onRefresh: () => ref.read(employeesListProvider.notifier).refresh(),
@@ -121,7 +134,7 @@ class _EmployeesListScreenState extends ConsumerState<EmployeesListScreen> {
                         ref.read(employeesListProvider.notifier).nextPage();
                         return const Padding(
                           padding: EdgeInsets.all(16),
-                          child: Center(child: CircularProgressIndicator()),
+                          child: SizedBox(height: 90, child: ContentSkeleton(type: ContentSkeletonType.list, itemCount: 1, padding: EdgeInsets.zero)),
                         );
                       }
                       final emp = state.employees[index];

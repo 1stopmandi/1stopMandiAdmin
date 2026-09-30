@@ -83,12 +83,20 @@ class OrdersListNotifier extends AsyncNotifier<OrdersListState> {
   Future<void> nextPage() async {
     final current = state.valueOrNull;
     if (current == null) return;
-    if (current.currentPage >= current.totalPages) return;
-    state = const AsyncLoading();
-    state = await AsyncValue.guard(
-      () => _fetch(
-          page: current.currentPage + 1, status: current.statusFilter),
-    );
+    if (current.currentPage >= current.totalPages || current.loading) return;
+
+    state = AsyncData(current.copyWith(loading: true));
+
+    try {
+      final next = await _fetch(
+          page: current.currentPage + 1, status: current.statusFilter);
+      state = AsyncData(next.copyWith(
+        orders: [...current.orders, ...next.orders],
+        loading: false,
+      ));
+    } catch (e) {
+      state = AsyncData(current.copyWith(loading: false, error: e.toString()));
+    }
   }
 }
 

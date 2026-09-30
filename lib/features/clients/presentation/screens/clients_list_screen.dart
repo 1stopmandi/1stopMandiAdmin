@@ -6,6 +6,12 @@ import '../../providers/clients_provider.dart';
 import '../../../../core/widgets/admin_menu_button.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../../../data/models/client.dart';
+import '../../../../core/theme/app_theme.dart';
+import '../../../../shared/widgets/app_card.dart';
+import '../../../../shared/widgets/app_chip.dart';
+import '../../../../shared/widgets/app_async_view.dart';
+import '../../../../shared/widgets/empty_state_view.dart';
+import '../../../../shared/widgets/skeleton_card.dart';
 
 class ClientsListScreen extends ConsumerStatefulWidget {
   const ClientsListScreen({super.key});
@@ -33,12 +39,13 @@ class _ClientsListScreenState extends ConsumerState<ClientsListScreen> {
   @override
   Widget build(BuildContext context) {
     final clientsAsync = ref.watch(clientsListProvider);
+    final currentState = clientsAsync.valueOrNull;
 
     return Scaffold(
       appBar: AppBar(
         leading: const AdminMenuButton(),
         title: const Text('Clients'),
-        backgroundColor: Colors.green[800],
+        backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         actions: [
           IconButton(
@@ -56,7 +63,7 @@ class _ClientsListScreenState extends ConsumerState<ClientsListScreen> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => context.push('/clients/new'),
-        backgroundColor: Colors.green[700],
+        backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         icon: const Icon(Icons.person_add),
         label: const Text('Add Client'),
@@ -64,7 +71,7 @@ class _ClientsListScreenState extends ConsumerState<ClientsListScreen> {
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             child: Row(
               children: [
                 Expanded(
@@ -72,12 +79,25 @@ class _ClientsListScreenState extends ConsumerState<ClientsListScreen> {
                     controller: _searchCtrl,
                     decoration: InputDecoration(
                       hintText: 'Search phone, name, business…',
-                      prefixIcon: const Icon(Icons.search),
-                      border: const OutlineInputBorder(),
+                      prefixIcon: const Icon(Icons.search, color: Colors.grey),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: AppColors.primary),
+                      ),
+                      filled: true,
+                      fillColor: Colors.white,
                       isDense: true,
                       suffixIcon: _searchCtrl.text.isNotEmpty
                           ? IconButton(
-                              icon: const Icon(Icons.clear),
+                              icon: const Icon(Icons.clear, color: Colors.grey),
                               onPressed: () {
                                 _searchCtrl.clear();
                                 ref.read(clientsListProvider.notifier).search('');
@@ -93,6 +113,11 @@ class _ClientsListScreenState extends ConsumerState<ClientsListScreen> {
                 ),
                 const SizedBox(width: 8),
                 IconButton.filled(
+                  style: IconButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.all(12),
+                  ),
                   onPressed: () =>
                       ref.read(clientsListProvider.notifier).search(_searchCtrl.text),
                   icon: const Icon(Icons.search),
@@ -101,59 +126,48 @@ class _ClientsListScreenState extends ConsumerState<ClientsListScreen> {
             ),
           ),
           _FilterBar(
-            approvalFilter: clientsAsync.valueOrNull?.approvalFilter,
-            outstandingOnly: clientsAsync.valueOrNull?.outstandingOnly ?? false,
+            approvalFilter: currentState?.approvalFilter,
+            outstandingOnly: currentState?.outstandingOnly ?? false,
             onApprovalChanged: (v) =>
                 ref.read(clientsListProvider.notifier).setApprovalFilter(v),
             onOutstandingChanged: (v) =>
                 ref.read(clientsListProvider.notifier).toggleOutstandingOnly(v),
           ),
           Expanded(
-            child: clientsAsync.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.error_outline, size: 48, color: Colors.red),
-                    const SizedBox(height: 12),
-                    Text(e.toString()),
-                    const SizedBox(height: 12),
-                    ElevatedButton(
-                      onPressed: () =>
-                          ref.read(clientsListProvider.notifier).refresh(),
-                      child: const Text('Retry'),
-                    ),
-                  ],
-                ),
+            child: AppAsyncView<ClientsListState>(
+              asyncValue: clientsAsync,
+              skeleton: const AdminSkeletonListView.clients(),
+              onRefresh: () => ref.read(clientsListProvider.notifier).refresh(),
+              onRetry: () => ref.read(clientsListProvider.notifier).refresh(),
+              isEmpty: (state) => state.clients.isEmpty,
+              emptyState: const EmptyStateView(
+                icon: Icons.people_outline,
+                title: 'No clients found',
+                subtitle: 'Try adjusting your filters or search query.',
               ),
-              data: (state) => state.clients.isEmpty
-                  ? const Center(child: Text('No clients found'))
-                  : RefreshIndicator(
-                      onRefresh: () =>
-                          ref.read(clientsListProvider.notifier).refresh(),
-                      child: ListView.builder(
-                        padding: const EdgeInsets.all(12),
-                        itemCount: state.clients.length +
-                            (state.currentPage < state.totalPages ? 1 : 0),
-                        itemBuilder: (ctx, i) {
-                          if (i == state.clients.length) {
-                            return Center(
-                              child: Padding(
-                                padding: const EdgeInsets.all(16),
-                                child: ElevatedButton(
-                                  onPressed: () => ref
-                                      .read(clientsListProvider.notifier)
-                                      .nextPage(),
-                                  child: const Text('Load more'),
-                                ),
-                              ),
-                            );
-                          }
-                          return _ClientCard(client: state.clients[i]);
-                        },
-                      ),
-                    ),
+              builder: (context, state) {
+                return ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
+                  itemCount: state.clients.length +
+                      (state.currentPage < state.totalPages ? 1 : 0),
+                  itemBuilder: (ctx, i) {
+                    if (i == state.clients.length) {
+                      if (!state.loading) {
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          ref.read(clientsListProvider.notifier).nextPage();
+                        });
+                      }
+                      return const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(24),
+                          child: AdminClientCardSkeleton(),
+                        ),
+                      );
+                    }
+                    return _ClientCard(client: state.clients[i]);
+                  },
+                );
+              },
             ),
           ),
         ],
@@ -177,11 +191,12 @@ class _FilterBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
+    return Container(
       height: 56,
+      margin: const EdgeInsets.symmetric(vertical: 4),
       child: ListView(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         children: [
           ..._ClientsListScreenState._approvalFilters.map((f) {
             final selected = approvalFilter == f.$1;
@@ -190,16 +205,38 @@ class _FilterBar extends StatelessWidget {
               child: FilterChip(
                 label: Text(f.$2),
                 selected: selected,
+                showCheckmark: false,
                 onSelected: (_) => onApprovalChanged(f.$1),
-                selectedColor: Colors.green[200],
+                selectedColor: AppColors.primary.withOpacity(0.15),
+                labelStyle: TextStyle(
+                  color: selected ? AppColors.primary : Colors.black87,
+                  fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                  side: BorderSide(
+                    color: selected ? AppColors.primary : Colors.grey.shade300,
+                  ),
+                ),
               ),
             );
           }),
           FilterChip(
             label: const Text('Outstanding'),
             selected: outstandingOnly,
+            showCheckmark: false,
             onSelected: onOutstandingChanged,
-            selectedColor: Colors.orange[200],
+            selectedColor: Colors.orange.shade100,
+            labelStyle: TextStyle(
+              color: outstandingOnly ? Colors.orange.shade800 : Colors.black87,
+              fontWeight: outstandingOnly ? FontWeight.bold : FontWeight.normal,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: BorderSide(
+                color: outstandingOnly ? Colors.orange.shade800 : Colors.grey.shade300,
+              ),
+            ),
           ),
         ],
       ),
@@ -215,65 +252,68 @@ class _ClientCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 10),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () => context.push('/clients/${client.id}'),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return AppCard(
+      margin: const EdgeInsets.only(bottom: 12),
+      onTap: () => context.push('/clients/${client.id}'),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      client.displayName,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
-                      ),
-                    ),
+              Expanded(
+                child: Text(
+                  client.displayName,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
                   ),
-                  if (client.isBlocked)
-                    _Badge('Blocked', Colors.red)
-                  else if (client.accountStatus == 'provisional')
-                    _Badge('Provisional', Colors.blue),
-                ],
-              ),
-              if (client.phone != null) ...[
-                const SizedBox(height: 4),
-                Text(client.phone!, style: const TextStyle(color: Colors.black87)),
-              ],
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 4,
-                children: [
-                  _Badge(
-                    _label(client.setupApprovalStatus),
-                    _approvalColor(client.setupApprovalStatus),
-                  ),
-                  if (client.outstandingBalance > 0)
-                    _Badge(
-                      '₹${client.outstandingBalance.toStringAsFixed(0)} due',
-                      Colors.orange,
-                    ),
-                  if (client.isSetupCompleted)
-                    const _Badge('Setup done', Colors.green),
-                ],
-              ),
-              if (client.createdAt != null) ...[
-                const SizedBox(height: 6),
-                Text(
-                  'Joined ${_dateFmt.format(client.createdAt!.toLocal())}',
-                  style: const TextStyle(fontSize: 11, color: Colors.grey),
                 ),
-              ],
+              ),
+              if (client.isBlocked)
+                const AppChip(label: 'Blocked', color: Colors.red)
+              else if (client.accountStatus == 'provisional')
+                const AppChip(label: 'Provisional', color: Colors.blue),
             ],
           ),
-        ),
+          if (client.phone != null) ...[
+            const SizedBox(height: 4),
+            Text(client.phone!, style: TextStyle(color: Colors.grey.shade700, fontSize: 14)),
+          ],
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              AppChip(
+                label: _label(client.setupApprovalStatus),
+                color: _approvalColor(client.setupApprovalStatus),
+              ),
+              if (client.outstandingBalance > 0)
+                AppChip(
+                  label: '₹${client.outstandingBalance.toStringAsFixed(0)} due',
+                  color: Colors.orange.shade800,
+                ),
+              if (client.isSetupCompleted)
+                const AppChip(label: 'Setup done', color: AppColors.primary),
+            ],
+          ),
+          if (client.createdAt != null) ...[
+            const SizedBox(height: 12),
+            Divider(height: 1, color: Colors.grey.shade100),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Icon(Icons.calendar_today_outlined, size: 12, color: Colors.grey.shade500),
+                const SizedBox(width: 4),
+                Text(
+                  'Joined ${_dateFmt.format(client.createdAt!.toLocal())}',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                ),
+              ],
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -285,35 +325,8 @@ class _ClientCard extends StatelessWidget {
       .join(' ');
 
   static Color _approvalColor(String status) => switch (status) {
-        'approved' => Colors.green,
+        'approved' => AppColors.primary,
         'rejected' => Colors.red,
         _ => Colors.orange,
       };
-}
-
-class _Badge extends StatelessWidget {
-  final String label;
-  final Color color;
-
-  const _Badge(this.label, this.color);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.6)),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: color,
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
 }

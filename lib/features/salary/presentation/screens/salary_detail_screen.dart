@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import '../../../../shared/widgets/skeleton_card.dart';
+import '../../../../shared/widgets/error_view.dart';
+import '../../../../shared/utils/app_toast.dart';
+import '../../../../core/network/api_exceptions.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/salary_provider.dart';
@@ -23,8 +27,7 @@ class SalaryDetailScreen extends ConsumerWidget {
                     ? IconButton(
                         icon: const Icon(Icons.refresh),
                         tooltip: 'Recalculate',
-                        onPressed: () =>
-                            ref.read(salaryPeriodDetailProvider(periodId).notifier).recalculate(),
+                        onPressed: () => _recalculate(context, ref),
                       )
                     : null,
               ) ??
@@ -43,8 +46,11 @@ class SalaryDetailScreen extends ConsumerWidget {
             : null,
       ),
       body: detailAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
+        loading: () => const ContentSkeleton(type: ContentSkeletonType.detail),
+        error: (e, _) => ErrorView(
+          message: e.toString(),
+          onRetry: () => ref.invalidate(salaryPeriodDetailProvider(periodId)),
+        ),
         data: (sp) => RefreshIndicator(
           onRefresh: () => ref.read(salaryPeriodDetailProvider(periodId).notifier).refresh(),
           child: ListView(
@@ -66,6 +72,21 @@ class SalaryDetailScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _recalculate(BuildContext context, WidgetRef ref) async {
+    try {
+      await ref
+          .read(salaryPeriodDetailProvider(periodId).notifier)
+          .recalculate();
+      if (context.mounted) {
+        AppToast.success(context, 'Salary recalculated');
+      }
+    } catch (error) {
+      if (context.mounted) {
+        AppToast.error(context, friendlyError(error));
+      }
+    }
   }
 
   void _showPaymentDialog(BuildContext context, WidgetRef ref, SalaryPeriod sp) {
@@ -118,15 +139,33 @@ class SalaryDetailScreen extends ConsumerWidget {
             FilledButton(
               onPressed: () async {
                 final amount = double.tryParse(amountCtrl.text);
-                if (amount == null || amount <= 0) return;
+                if (amount == null || amount <= 0) {
+                  AppToast.error(context, 'Enter a valid payment amount');
+                  return;
+                }
                 Navigator.pop(ctx);
-                await ref.read(salaryPeriodDetailProvider(periodId).notifier).recordPayment(
-                  amount: amount,
-                  method: method,
-                  date: DateTime.now().toString().split(' ')[0],
-                  reference: refCtrl.text.trim().isNotEmpty ? refCtrl.text.trim() : null,
-                  notes: notesCtrl.text.trim().isNotEmpty ? notesCtrl.text.trim() : null,
-                );
+                try {
+                  await ref
+                      .read(salaryPeriodDetailProvider(periodId).notifier)
+                      .recordPayment(
+                        amount: amount,
+                        method: method,
+                        date: DateTime.now().toString().split(' ')[0],
+                        reference: refCtrl.text.trim().isNotEmpty
+                            ? refCtrl.text.trim()
+                            : null,
+                        notes: notesCtrl.text.trim().isNotEmpty
+                            ? notesCtrl.text.trim()
+                            : null,
+                      );
+                  if (context.mounted) {
+                    AppToast.success(context, 'Payment recorded');
+                  }
+                } catch (error) {
+                  if (context.mounted) {
+                    AppToast.error(context, friendlyError(error));
+                  }
+                }
               },
               child: const Text('Pay'),
             ),

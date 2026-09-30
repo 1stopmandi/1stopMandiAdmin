@@ -5,6 +5,10 @@ import '../../providers/pricing_provider.dart';
 import '../../../../core/widgets/admin_menu_button.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../../../data/models/pricing.dart';
+import '../../../../core/network/api_exceptions.dart';
+import '../../../../shared/widgets/empty_state_view.dart';
+import '../../../../shared/widgets/error_view.dart';
+import '../../../../shared/widgets/skeleton_card.dart';
 
 class LegacyPricingListScreen extends ConsumerWidget {
   const LegacyPricingListScreen({super.key});
@@ -62,10 +66,19 @@ class LegacyPricingListScreen extends ConsumerWidget {
           ),
           Expanded(
             child: listAsync.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(child: Text(e.toString())),
+              loading: () => const ContentSkeleton(type: ContentSkeletonType.list),
+              error: (e, _) => ErrorView(
+                message: friendlyError(e),
+                onRetry: () => ref.read(legacyPricingListProvider.notifier).refresh(),
+              ),
               data: (rows) => rows.isEmpty
-                  ? const Center(child: Text('No products'))
+                  ? EmptyStateView(
+                      icon: Icons.price_change_outlined,
+                      title: 'No products found',
+                      subtitle: 'Try changing the pricing filter.',
+                      actionLabel: 'Show all products',
+                      onAction: () => ref.read(legacyPricingListProvider.notifier).setUnpricedOnly(false),
+                    )
                   : RefreshIndicator(
                       onRefresh: () =>
                           ref.read(legacyPricingListProvider.notifier).refresh(),

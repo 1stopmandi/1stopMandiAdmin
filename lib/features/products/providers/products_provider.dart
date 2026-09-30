@@ -119,9 +119,10 @@ class ProductsListNotifier extends AsyncNotifier<ProductsListState> {
 
   Future<void> nextPage() async {
     final current = state.valueOrNull;
-    if (current == null || current.currentPage >= current.totalPages) return;
-    state = const AsyncLoading();
-    state = await AsyncValue.guard(() async {
+    if (current == null || current.currentPage >= current.totalPages || current.loading) return;
+    
+    state = AsyncData(current.copyWith(loading: true));
+    try {
       final repo = ref.read(productsRepositoryProvider);
       final result = await repo.listProducts(
         search: current.search,
@@ -129,16 +130,16 @@ class ProductsListNotifier extends AsyncNotifier<ProductsListState> {
         isActive: current.activeFilter,
         page: current.currentPage + 1,
       );
-      return ProductsListState(
+      state = AsyncData(current.copyWith(
         products: [...current.products, ...result.products],
         total: result.total,
         totalPages: result.totalPages,
         currentPage: current.currentPage + 1,
-        search: current.search,
-        categoryFilter: current.categoryFilter,
-        activeFilter: current.activeFilter,
-      );
-    });
+        loading: false,
+      ));
+    } catch (e) {
+      state = AsyncData(current.copyWith(loading: false, error: e.toString()));
+    }
   }
 }
 

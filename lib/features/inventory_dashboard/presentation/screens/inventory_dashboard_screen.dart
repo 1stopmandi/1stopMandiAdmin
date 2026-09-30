@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../../../shared/widgets/skeleton_card.dart';
+import '../../../../shared/widgets/error_view.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/inventory_dashboard_provider.dart';
 import '../../../../core/widgets/admin_menu_button.dart';
@@ -29,8 +31,8 @@ class InventoryDashboardScreen extends ConsumerWidget {
           _PeriodSelector(current: period),
           Expanded(
             child: dashAsync.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(child: Text('Error: $e')),
+              loading: () => const ContentSkeleton(type: ContentSkeletonType.dashboard),
+              error: (e, _) => ErrorView(message: e.toString()),
               data: (data) => RefreshIndicator(
                 onRefresh: () => ref.read(inventoryDashboardProvider.notifier).refresh(),
                 child: ListView(

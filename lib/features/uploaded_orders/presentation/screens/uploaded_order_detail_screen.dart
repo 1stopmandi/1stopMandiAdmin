@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/api_exceptions.dart';
 import '../../../../core/providers/providers.dart';
 import '../../../../core/utils/media_url.dart';
+import '../../../../shared/utils/app_toast.dart';
+import '../../../../shared/widgets/skeleton_card.dart';
+import '../../../../shared/widgets/error_view.dart';
 import '../../../../data/models/product.dart';
 import '../../providers/uploaded_orders_provider.dart';
 
@@ -61,9 +64,7 @@ class _UploadedOrderDetailScreenState
             })
         .toList();
     if (items.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Add at least one product line')),
-      );
+      AppToast.warning(context, 'Add at least one product line');
       return;
     }
     setState(() => _loading = true);
@@ -73,15 +74,11 @@ class _UploadedOrderDetailScreenState
             notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
           );
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Marked ready — buyer can add to cart')),
-        );
+        AppToast.success(context, 'Marked ready — buyer can add to cart');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(friendlyError(e))),
-        );
+        AppToast.error(context, friendlyError(e));
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -121,9 +118,7 @@ class _UploadedOrderDetailScreenState
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(friendlyError(e))),
-        );
+        AppToast.error(context, friendlyError(e));
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -141,8 +136,13 @@ class _UploadedOrderDetailScreenState
         foregroundColor: Colors.white,
       ),
       body: detailAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text(e.toString())),
+        loading: () => const ContentSkeleton(type: ContentSkeletonType.detail),
+        error: (e, _) => ErrorView(
+          message: friendlyError(e),
+          onRetry: () => ref.invalidate(
+            uploadedOrderDetailProvider(widget.uploadId),
+          ),
+        ),
         data: (upload) {
           if (!_linesInitialized && upload.status == 'processing') {
             _linesInitialized = true;
@@ -326,7 +326,7 @@ class _ProductPickerDialogState extends ConsumerState<_ProductPickerDialog> {
             const SizedBox(height: 8),
             Expanded(
               child: _loading
-                  ? const Center(child: CircularProgressIndicator())
+                  ? const ContentSkeleton(type: ContentSkeletonType.list, itemCount: 3)
                   : ListView.builder(
                       itemCount: _products.length,
                       itemBuilder: (_, i) {

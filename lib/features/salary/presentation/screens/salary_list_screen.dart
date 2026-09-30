@@ -4,6 +4,10 @@ import 'package:go_router/go_router.dart';
 import '../../providers/salary_provider.dart';
 import '../../data/models/salary.dart';
 import '../../../../core/widgets/admin_menu_button.dart';
+import '../../../../core/network/api_exceptions.dart';
+import '../../../../shared/widgets/empty_state_view.dart';
+import '../../../../shared/widgets/error_view.dart';
+import '../../../../shared/widgets/skeleton_card.dart';
 
 class SalaryListScreen extends ConsumerWidget {
   const SalaryListScreen({super.key});
@@ -64,11 +68,20 @@ class SalaryListScreen extends ConsumerWidget {
           ),
           Expanded(
             child: listAsync.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(child: Text('Error: $e')),
+              loading: () => const ContentSkeleton(type: ContentSkeletonType.list),
+              error: (e, _) => ErrorView(
+                message: friendlyError(e),
+                onRetry: () => ref.read(salaryPeriodsListProvider.notifier).refresh(),
+              ),
               data: (state) {
                 if (state.periods.isEmpty) {
-                  return const Center(child: Text('No salary periods found'));
+                  return EmptyStateView(
+                    icon: Icons.account_balance_wallet_outlined,
+                    title: 'No salary periods found',
+                    subtitle: 'Generate a salary period to begin payroll processing.',
+                    actionLabel: 'Generate salary',
+                    onAction: () => context.push('/salary/generate'),
+                  );
                 }
                 return RefreshIndicator(
                   onRefresh: () => ref.read(salaryPeriodsListProvider.notifier).refresh(),
@@ -77,9 +90,10 @@ class SalaryListScreen extends ConsumerWidget {
                     itemBuilder: (context, index) {
                       if (index >= state.periods.length) {
                         ref.read(salaryPeriodsListProvider.notifier).nextPage();
-                        return const Padding(
-                          padding: EdgeInsets.all(16),
-                          child: Center(child: CircularProgressIndicator()),
+                        return const ContentSkeleton(
+                          type: ContentSkeletonType.list,
+                          itemCount: 1,
+                          padding: EdgeInsets.symmetric(vertical: 8),
                         );
                       }
                       return _PeriodCard(period: state.periods[index]);

@@ -1,8 +1,15 @@
 import 'package:flutter/material.dart';
+import '../../../../shared/widgets/skeleton_card.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../../../core/network/api_exceptions.dart';
 import '../../../../core/providers/providers.dart';
+import '../../../../core/theme/app_theme.dart';
+import '../../../../shared/utils/app_toast.dart';
+import '../../../../shared/widgets/app_button.dart';
+import '../../../../shared/widgets/app_card.dart';
+import '../../../../shared/widgets/section_header.dart';
 import '../../../../data/models/category.dart';
 import '../../providers/categories_provider.dart';
 
@@ -25,7 +32,6 @@ class _CategoryFormScreenState extends ConsumerState<CategoryFormScreen> {
   bool _slugManual = false;
   bool _loading = false;
   bool _loaded = false;
-  String? _error;
 
   @override
   void dispose() {
@@ -45,24 +51,22 @@ class _CategoryFormScreenState extends ConsumerState<CategoryFormScreen> {
   Future<void> _loadExisting() async {
     if (!widget.isEdit || _loaded) return;
     try {
-      final c = await ref
-          .read(categoriesRepositoryProvider)
-          .getCategory(widget.categoryId!);
+      final c = await ref.read(categoriesRepositoryProvider).getCategory(widget.categoryId!);
       _nameCtrl.text = c.name;
       _slugCtrl.text = c.slug;
       _sortOrderCtrl.text = c.sortOrder.toString();
       _slugManual = true;
       _loaded = true;
     } catch (e) {
-      _error = friendlyError(e);
+      if (mounted) {
+        AppToast.error(context, friendlyError(e));
+        context.pop();
+      }
     }
   }
 
   Future<void> _submit() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+    setState(() => _loading = true);
     try {
       final repo = ref.read(categoriesRepositoryProvider);
       final sortOrder = int.tryParse(_sortOrderCtrl.text.trim()) ?? 0;
@@ -73,7 +77,10 @@ class _CategoryFormScreenState extends ConsumerState<CategoryFormScreen> {
           'sort_order': sortOrder,
         });
         ref.read(categoriesListProvider.notifier).refresh();
-        if (mounted) context.pop(true);
+        if (mounted) {
+          AppToast.success(context, 'Category updated successfully');
+          context.pop(true);
+        }
       } else {
         if (_nameCtrl.text.trim().isEmpty || _slugCtrl.text.trim().isEmpty) {
           throw const ApiException('Name and slug are required');
@@ -84,10 +91,15 @@ class _CategoryFormScreenState extends ConsumerState<CategoryFormScreen> {
           sortOrder: sortOrder,
         );
         ref.read(categoriesListProvider.notifier).refresh();
-        if (mounted) context.go('/categories/${category.id}');
+        if (mounted) {
+          AppToast.success(context, 'Category created successfully');
+          context.pushReplacement('/categories/${category.id}');
+        }
       }
     } catch (e) {
-      setState(() => _error = friendlyError(e));
+      if (mounted) {
+        AppToast.error(context, friendlyError(e));
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -95,7 +107,7 @@ class _CategoryFormScreenState extends ConsumerState<CategoryFormScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (widget.isEdit && !_loaded && _error == null) {
+    if (widget.isEdit && !_loaded) {
       _loadExisting().then((_) {
         if (mounted) setState(() {});
       });
@@ -104,74 +116,68 @@ class _CategoryFormScreenState extends ConsumerState<CategoryFormScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.isEdit ? 'Edit Category' : 'Add Category'),
-        backgroundColor: Colors.green[800],
+        backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
       ),
-      body: widget.isEdit && !_loaded && _error == null
-          ? const Center(child: CircularProgressIndicator())
+      body: widget.isEdit && !_loaded
+          ? const ContentSkeleton(type: ContentSkeletonType.form)
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  TextField(
-                    controller: _nameCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Category name *',
-                      border: OutlineInputBorder(),
-                    ),
-                    onChanged: _onNameChanged,
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _slugCtrl,
-                    enabled: !widget.isEdit,
-                    decoration: InputDecoration(
-                      labelText: 'Slug *',
-                      border: const OutlineInputBorder(),
-                      helperText: widget.isEdit
-                          ? 'Slug cannot be changed after creation'
-                          : 'Lowercase kebab-case, e.g. vegetables',
-                    ),
-                    onChanged: (_) {
-                      if (!widget.isEdit) _slugManual = true;
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _sortOrderCtrl,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Sort order',
-                      border: OutlineInputBorder(),
-                      helperText: 'Lower numbers appear first in the catalog',
-                    ),
-                  ),
-                  if (_error != null) ...[
-                    const SizedBox(height: 12),
-                    Text(_error!, style: const TextStyle(color: Colors.red)),
-                  ],
-                  const SizedBox(height: 24),
-                  ElevatedButton(
-                    onPressed: _loading ? null : _submit,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green[700],
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                    child: _loading
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : Text(
-                            widget.isEdit ? 'Save changes' : 'Create category',
+                  const SectionHeader(title: 'Category Details'),
+                  const SizedBox(height: 8),
+                  AppCard(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      children: [
+                        TextFormField(
+                          controller: _nameCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Category Name *',
+                            hintText: 'e.g. Vegetables',
                           ),
+                          onChanged: _onNameChanged,
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _slugCtrl,
+                          enabled: !widget.isEdit,
+                          decoration: InputDecoration(
+                            labelText: 'Slug *',
+                            hintText: 'e.g. vegetables',
+                            helperText: widget.isEdit
+                                ? 'Slug cannot be changed after creation'
+                                : 'Lowercase kebab-case used for URLs',
+                            filled: true,
+                            fillColor: widget.isEdit ? const Color(0xFFF9FAFB) : Colors.white,
+                          ),
+                          onChanged: (_) {
+                            if (!widget.isEdit) _slugManual = true;
+                          },
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _sortOrderCtrl,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: 'Sort Order',
+                            hintText: 'e.g. 1',
+                            helperText: 'Lower numbers appear first in the catalog',
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
+                  const SizedBox(height: 32),
+                  
+                  AppButton.primary(
+                    onPressed: _submit,
+                    isLoading: _loading,
+                    label: widget.isEdit ? 'Save Changes' : 'Create Category',
+                  ),
+                  const SizedBox(height: 40),
                 ],
               ),
             ),

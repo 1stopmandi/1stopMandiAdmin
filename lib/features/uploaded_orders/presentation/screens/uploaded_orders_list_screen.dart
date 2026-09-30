@@ -7,6 +7,10 @@ import '../../../../core/widgets/admin_menu_button.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../../../core/utils/media_url.dart';
 import '../../../../data/models/uploaded_order.dart';
+import '../../../../core/network/api_exceptions.dart';
+import '../../../../shared/widgets/empty_state_view.dart';
+import '../../../../shared/widgets/error_view.dart';
+import '../../../../shared/widgets/skeleton_card.dart';
 
 class UploadedOrdersListScreen extends ConsumerWidget {
   const UploadedOrdersListScreen({super.key});
@@ -67,10 +71,19 @@ class UploadedOrdersListScreen extends ConsumerWidget {
           ),
           Expanded(
             child: listAsync.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(child: Text(e.toString())),
+              loading: () => const ContentSkeleton(type: ContentSkeletonType.list),
+              error: (e, _) => ErrorView(
+                message: friendlyError(e),
+                onRetry: () => ref.read(uploadedOrdersListProvider.notifier).refresh(),
+              ),
               data: (items) => items.isEmpty
-                  ? const Center(child: Text('No uploads in this status'))
+                  ? EmptyStateView(
+                      icon: Icons.upload_file_outlined,
+                      title: 'No uploads in this status',
+                      subtitle: 'New buyer uploads will appear here.',
+                      actionLabel: 'Refresh',
+                      onAction: () => ref.read(uploadedOrdersListProvider.notifier).refresh(),
+                    )
                   : RefreshIndicator(
                       onRefresh: () =>
                           ref.read(uploadedOrdersListProvider.notifier).refresh(),

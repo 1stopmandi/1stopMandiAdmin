@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../../../shared/widgets/skeleton_card.dart';
+import '../../../../shared/widgets/error_view.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/dashboard_provider.dart';
@@ -26,8 +28,8 @@ class EmployeeDashboardScreen extends ConsumerWidget {
         ],
       ),
       body: metricsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
+        loading: () => const ContentSkeleton(type: ContentSkeletonType.dashboard),
+        error: (e, _) => ErrorView(message: e.toString()),
         data: (metrics) => RefreshIndicator(
           onRefresh: () => ref.read(employeeDashboardProvider.notifier).refresh(),
           child: ListView(

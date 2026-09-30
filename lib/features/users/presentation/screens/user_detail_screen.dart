@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/api_exceptions.dart';
+import '../../../../shared/utils/app_toast.dart';
+import '../../../../shared/widgets/skeleton_card.dart';
+import '../../../../shared/widgets/error_view.dart';
 import '../../providers/users_provider.dart';
 
 class UserDetailScreen extends ConsumerWidget {
@@ -26,8 +29,11 @@ class UserDetailScreen extends ConsumerWidget {
         ],
       ),
       body: detailAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text(e.toString())),
+        loading: () => const ContentSkeleton(type: ContentSkeletonType.detail),
+        error: (e, _) => ErrorView(
+          message: friendlyError(e),
+          onRetry: () => ref.invalidate(userDetailProvider(userId)),
+        ),
         data: (state) => _Body(state: state, userId: userId),
       ),
     );
@@ -108,15 +114,11 @@ class _Body extends ConsumerWidget {
     try {
       await notifier.setRole(role);
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Role set to $role')),
-        );
+        AppToast.success(context, 'Role set to $role');
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(friendlyError(e))),
-        );
+        AppToast.error(context, friendlyError(e));
       }
     }
   }
@@ -148,9 +150,7 @@ class _Body extends ConsumerWidget {
       await notifier.setBlocked(true, reason: reasonCtrl.text.trim());
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(friendlyError(e))),
-        );
+        AppToast.error(context, friendlyError(e));
       }
     }
   }

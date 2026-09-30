@@ -5,6 +5,10 @@ import 'package:intl/intl.dart';
 import '../../providers/inventory_provider.dart';
 import '../../data/models/inventory_record.dart';
 import '../../../../core/widgets/admin_menu_button.dart';
+import '../../../../core/network/api_exceptions.dart';
+import '../../../../shared/widgets/empty_state_view.dart';
+import '../../../../shared/widgets/error_view.dart';
+import '../../../../shared/widgets/skeleton_card.dart';
 
 class InventoryHomeScreen extends ConsumerStatefulWidget {
   const InventoryHomeScreen({super.key});
@@ -67,10 +71,19 @@ class _InventoryHomeScreenState extends ConsumerState<InventoryHomeScreen> {
           _FilterChips(),
           Expanded(
             child: listAsync.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(child: Text('Error: $e')),
+              loading: () => const ContentSkeleton(type: ContentSkeletonType.list),
+              error: (e, _) => ErrorView(
+                message: friendlyError(e),
+                onRetry: () => ref.read(inventoryListProvider.notifier).refresh(),
+              ),
               data: (state) => state.records.isEmpty
-                  ? const Center(child: Text('No inventory records found'))
+                  ? EmptyStateView(
+                      icon: Icons.inventory_2_outlined,
+                      title: 'No inventory records found',
+                      subtitle: 'Create the first purchasing and stock record.',
+                      actionLabel: 'Create record',
+                      onAction: () => context.push('/inventory-mgmt/create'),
+                    )
                   : RefreshIndicator(
                       onRefresh: () =>
                           ref.read(inventoryListProvider.notifier).refresh(),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../shared/utils/app_toast.dart';
 import '../../providers/employees_provider.dart';
 
 class EmployeeFormScreen extends ConsumerStatefulWidget {
@@ -258,12 +259,16 @@ class _EmployeeFormScreenState extends ConsumerState<EmployeeFormScreen> {
         await repo.create(data);
       }
       ref.read(employeesListProvider.notifier).refresh();
-      if (mounted) context.pop();
+      if (mounted) {
+        AppToast.success(
+          context,
+          _isEdit ? 'Employee updated' : 'Employee created',
+        );
+        context.pop();
+      }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
-        );
+        AppToast.error(context, e.toString());
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);

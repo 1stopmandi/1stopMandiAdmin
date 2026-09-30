@@ -8,6 +8,8 @@ import '../../../../core/providers/providers.dart';
 import '../../../../core/widgets/admin_menu_button.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../../../data/models/pricing.dart';
+import '../../../../shared/utils/app_toast.dart';
+import '../../../../shared/widgets/skeleton_card.dart';
 
 class BulkPricingScreen extends ConsumerStatefulWidget {
   const BulkPricingScreen({super.key});
@@ -37,9 +39,7 @@ class _BulkPricingScreenState extends ConsumerState<BulkPricingScreen> {
       setState(() => _exportPreview = csv);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(friendlyError(e))),
-        );
+        AppToast.error(context, friendlyError(e));
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -65,9 +65,7 @@ class _BulkPricingScreenState extends ConsumerState<BulkPricingScreen> {
       setState(() => _importPreview = preview);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(friendlyError(e))),
-        );
+        AppToast.error(context, friendlyError(e));
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -82,16 +80,12 @@ class _BulkPricingScreenState extends ConsumerState<BulkPricingScreen> {
       final updated =
           await ref.read(pricingRepositoryProvider).confirmImport(batch.batchId);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Applied pricing to $updated products')),
-        );
+        AppToast.success(context, 'Applied pricing to $updated products');
         setState(() => _importPreview = null);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(friendlyError(e))),
-        );
+        AppToast.error(context, friendlyError(e));
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -102,9 +96,7 @@ class _BulkPricingScreenState extends ConsumerState<BulkPricingScreen> {
     final slug = _slugCtrl.text.trim();
     final price = double.tryParse(_priceCtrl.text.trim());
     if (slug.isEmpty || price == null || price <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter product slug and valid price')),
-      );
+      AppToast.warning(context, 'Enter product slug and valid price');
       return;
     }
     setState(() => _loading = true);
@@ -114,26 +106,19 @@ class _BulkPricingScreenState extends ConsumerState<BulkPricingScreen> {
       ]);
       if (mounted) {
         if (result.applied) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Updated ${result.updated} product(s)')),
-          );
+          AppToast.success(context, 'Updated ${result.updated} product(s)');
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                result.failed.isNotEmpty
-                    ? result.failed.first['reason']?.toString() ?? 'Update failed'
-                    : 'Update failed',
-              ),
-            ),
+          AppToast.error(
+            context,
+            result.failed.isNotEmpty
+                ? result.failed.first['reason']?.toString() ?? 'Update failed'
+                : 'Update failed',
           );
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(friendlyError(e))),
-        );
+        AppToast.error(context, friendlyError(e));
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -159,7 +144,7 @@ class _BulkPricingScreenState extends ConsumerState<BulkPricingScreen> {
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const ContentSkeleton(type: ContentSkeletonType.form)
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
@@ -185,9 +170,7 @@ class _BulkPricingScreenState extends ConsumerState<BulkPricingScreen> {
                             onPressed: () {
                               Clipboard.setData(
                                   ClipboardData(text: _exportPreview!));
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('CSV copied to clipboard')),
-                              );
+                              AppToast.success(context, 'CSV copied to clipboard');
                             },
                             icon: const Icon(Icons.copy),
                             label: const Text('Copy to clipboard'),

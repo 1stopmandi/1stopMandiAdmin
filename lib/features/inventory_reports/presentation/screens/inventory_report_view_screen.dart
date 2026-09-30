@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import '../../../../shared/widgets/skeleton_card.dart';
+import '../../../../shared/widgets/error_view.dart';
+import '../../../../shared/widgets/empty_state_view.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../providers/inventory_reports_provider.dart';
@@ -81,8 +84,8 @@ class _SummaryReport extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final asyncData = ref.watch(inventorySummaryReportProvider);
     return asyncData.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(child: Text('Error: $e')),
+      loading: () => const ContentSkeleton(type: ContentSkeletonType.dashboard),
+      error: (e, _) => ErrorView(message: e.toString()),
       data: (summary) => ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -122,10 +125,10 @@ class _ProductReport extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final asyncData = ref.watch(productReportProvider);
     return asyncData.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(child: Text('Error: $e')),
+      loading: () => const ContentSkeleton(type: ContentSkeletonType.list),
+      error: (e, _) => ErrorView(message: e.toString()),
       data: (products) => products.isEmpty
-          ? const Center(child: Text('No data for this period'))
+          ? const EmptyStateView(icon: Icons.inventory_2_outlined, title: 'No data for this period')
           : SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: SingleChildScrollView(
@@ -164,10 +167,10 @@ class _WasteReport extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final asyncData = ref.watch(wasteReportProvider);
     return asyncData.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(child: Text('Error: $e')),
+      loading: () => const ContentSkeleton(type: ContentSkeletonType.list),
+      error: (e, _) => ErrorView(message: e.toString()),
       data: (products) => products.isEmpty
-          ? const Center(child: Text('No data for this period'))
+          ? const EmptyStateView(icon: Icons.delete_outline_rounded, title: 'No data for this period')
           : ListView.builder(
               padding: const EdgeInsets.all(12),
               itemCount: products.length,
@@ -215,10 +218,10 @@ class _RecoverableReport extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final asyncData = ref.watch(recoverableReportProvider);
     return asyncData.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(child: Text('Error: $e')),
+      loading: () => const ContentSkeleton(type: ContentSkeletonType.list),
+      error: (e, _) => ErrorView(message: e.toString()),
       data: (products) => products.isEmpty
-          ? const Center(child: Text('No data for this period'))
+          ? const EmptyStateView(icon: Icons.recycling_outlined, title: 'No data for this period')
           : ListView.builder(
               padding: const EdgeInsets.all(12),
               itemCount: products.length,
@@ -255,10 +258,10 @@ class _EmployeeReport extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final asyncData = ref.watch(employeeReportProvider);
     return asyncData.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(child: Text('Error: $e')),
+      loading: () => const ContentSkeleton(type: ContentSkeletonType.list),
+      error: (e, _) => ErrorView(message: e.toString()),
       data: (employees) => employees.isEmpty
-          ? const Center(child: Text('No data for this period'))
+          ? const EmptyStateView(icon: Icons.people_outline_rounded, title: 'No data for this period')
           : ListView.builder(
               padding: const EdgeInsets.all(12),
               itemCount: employees.length,

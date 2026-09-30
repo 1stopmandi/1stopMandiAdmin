@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/api_exceptions.dart';
+import '../../../../shared/utils/app_toast.dart';
+import '../../../../shared/widgets/skeleton_card.dart';
+import '../../../../shared/widgets/error_view.dart';
 import '../../../../data/models/pricing.dart';
 import '../../providers/pricing_provider.dart';
 
@@ -69,9 +72,7 @@ class _LegacyPricingEditScreenState extends ConsumerState<LegacyPricingEditScree
   Future<void> _save() async {
     final base = double.tryParse(_basePriceCtrl.text.trim());
     if (base == null || base <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a valid base price')),
-      );
+      AppToast.warning(context, 'Enter a valid base price');
       return;
     }
     setState(() => _loading = true);
@@ -81,15 +82,11 @@ class _LegacyPricingEditScreenState extends ConsumerState<LegacyPricingEditScree
             _readSlabs(),
           );
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Pricing saved')),
-        );
+        AppToast.success(context, 'Pricing saved');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(friendlyError(e))),
-        );
+        AppToast.error(context, friendlyError(e));
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -107,8 +104,13 @@ class _LegacyPricingEditScreenState extends ConsumerState<LegacyPricingEditScree
         foregroundColor: Colors.white,
       ),
       body: stateAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text(e.toString())),
+        loading: () => const ContentSkeleton(type: ContentSkeletonType.form),
+        error: (e, _) => ErrorView(
+          message: friendlyError(e),
+          onRetry: () => ref.invalidate(
+            legacyPricingEditProvider(widget.productId),
+          ),
+        ),
         data: (state) {
           _initFromPricing(state.pricing);
           return ListView(
@@ -215,17 +217,13 @@ class _LegacyPricingEditScreenState extends ConsumerState<LegacyPricingEditScree
                         .read(legacyPricingEditProvider(widget.productId).notifier)
                         .revert();
                     if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Reverted to previous price')),
-                      );
+                      AppToast.success(context, 'Reverted to previous price');
                       setState(() => _initialized = false);
                       ref.invalidate(legacyPricingEditProvider(widget.productId));
                     }
                   } catch (e) {
                     if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(friendlyError(e))),
-                      );
+                      AppToast.error(context, friendlyError(e));
                     }
                   }
                 },
