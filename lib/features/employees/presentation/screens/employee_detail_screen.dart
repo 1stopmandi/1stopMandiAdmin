@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import '../../../../shared/widgets/skeleton_card.dart';
+import '../../../../shared/widgets/error_view.dart';
+import '../../../../shared/utils/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/employees_provider.dart';
@@ -36,8 +39,11 @@ class EmployeeDetailScreen extends ConsumerWidget {
         ],
       ),
       body: detailAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
+        loading: () => const ContentSkeleton(type: ContentSkeletonType.detail),
+        error: (e, _) => ErrorView(
+          message: e.toString(),
+          onRetry: () => ref.invalidate(employeeDetailProvider(employeeId)),
+        ),
         data: (emp) => RefreshIndicator(
           onRefresh: () => ref.read(employeeDetailProvider(employeeId).notifier).refresh(),
           child: ListView(
@@ -88,42 +94,54 @@ class EmployeeDetailScreen extends ConsumerWidget {
 
   void _handleAction(BuildContext context, WidgetRef ref, String action) async {
     final notifier = ref.read(employeeDetailProvider(employeeId).notifier);
-    switch (action) {
-      case 'edit':
-        context.push('/employees/$employeeId/edit');
-      case 'active':
-        await notifier.updateStatus('active');
-      case 'inactive':
-        await notifier.updateStatus('inactive');
-      case 'left':
-        final confirm = await showDialog<bool>(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: const Text('Confirm'),
-            content: const Text('Mark employee as left? This cannot be undone.'),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-              TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Confirm')),
-            ],
-          ),
-        );
-        if (confirm == true) await notifier.updateStatus('left');
-      case 'delete':
-        final confirm = await showDialog<bool>(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: const Text('Delete Employee?'),
-            content: const Text('This will soft-delete the employee. They can be restored later.'),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-              TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
-            ],
-          ),
-        );
-        if (confirm == true) {
-          await notifier.deleteEmployee();
-          if (context.mounted) context.pop();
-        }
+    try {
+      switch (action) {
+        case 'edit':
+          context.push('/employees/$employeeId/edit');
+        case 'active':
+          await notifier.updateStatus('active');
+          if (context.mounted) AppToast.success(context, 'Employee activated');
+        case 'inactive':
+          await notifier.updateStatus('inactive');
+          if (context.mounted) AppToast.success(context, 'Employee marked inactive');
+        case 'left':
+          final confirm = await showDialog<bool>(
+            context: context,
+            builder: (_) => AlertDialog(
+              title: const Text('Confirm'),
+              content: const Text('Mark employee as left? This cannot be undone.'),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Confirm')),
+              ],
+            ),
+          );
+          if (confirm == true) {
+            await notifier.updateStatus('left');
+            if (context.mounted) AppToast.success(context, 'Employee marked as left');
+          }
+        case 'delete':
+          final confirm = await showDialog<bool>(
+            context: context,
+            builder: (_) => AlertDialog(
+              title: const Text('Delete Employee?'),
+              content: const Text('This will soft-delete the employee. They can be restored later.'),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
+              ],
+            ),
+          );
+          if (confirm == true) {
+            await notifier.deleteEmployee();
+            if (context.mounted) {
+              AppToast.success(context, 'Employee deleted');
+              context.pop();
+            }
+          }
+      }
+    } catch (error) {
+      if (context.mounted) AppToast.error(context, error.toString());
     }
   }
 }

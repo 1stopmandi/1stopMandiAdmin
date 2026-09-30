@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/router/app_router.dart';
 
+import 'core/theme/app_theme.dart';
+
 class AdminApp extends ConsumerWidget {
   const AdminApp({super.key});
 
@@ -11,10 +13,7 @@ class AdminApp extends ConsumerWidget {
 
     return MaterialApp.router(
       title: '1StopMandi Admin',
-      theme: ThemeData(
-        colorSchemeSeed: Colors.green,
-        useMaterial3: true,
-      ),
+      theme: AppTheme.light,
       routerConfig: router,
       debugShowCheckedModeBanner: false,
     );

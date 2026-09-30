@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../providers/attendance_provider.dart';
+import '../../../../core/network/api_exceptions.dart';
+import '../../../../shared/widgets/empty_state_view.dart';
+import '../../../../shared/widgets/error_view.dart';
+import '../../../../shared/widgets/skeleton_card.dart';
 
 class AttendanceHistoryScreen extends ConsumerStatefulWidget {
   final String employeeId;
@@ -68,15 +72,22 @@ class _AttendanceHistoryScreenState extends ConsumerState<AttendanceHistoryScree
           ),
           Expanded(
             child: historyAsync.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(child: Text('Error: $e')),
+              loading: () => const ContentSkeleton(type: ContentSkeletonType.list),
+              error: (e, _) => ErrorView(
+                message: friendlyError(e),
+                onRetry: () => ref.invalidate(employeeAttendanceHistoryProvider(params)),
+              ),
               data: (state) => Column(
                 children: [
                   _SummaryRow(summary: state.summary),
                   const Divider(height: 1),
                   Expanded(
                     child: state.records.isEmpty
-                        ? const Center(child: Text('No records for this period'))
+                        ? const EmptyStateView(
+                            icon: Icons.event_busy_outlined,
+                            title: 'No attendance records',
+                            subtitle: 'There are no entries for this date range.',
+                          )
                         : ListView.builder(
                             itemCount: state.records.length,
                             itemBuilder: (_, i) {

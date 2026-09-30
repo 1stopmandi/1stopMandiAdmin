@@ -1,12 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../providers/products_provider.dart';
 import '../../../categories/providers/categories_provider.dart';
 import '../../../../core/widgets/admin_menu_button.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../../../data/models/category.dart';
 import '../../../../data/models/product.dart';
+import '../../../../core/theme/app_theme.dart';
+import '../../../../shared/widgets/app_card.dart';
+import '../../../../shared/widgets/app_chip.dart';
+import '../../../../shared/widgets/app_async_view.dart';
+import '../../../../shared/widgets/empty_state_view.dart';
+import '../../../../shared/widgets/skeleton_card.dart';
 
 class ProductsListScreen extends ConsumerStatefulWidget {
   const ProductsListScreen({super.key});
@@ -27,6 +34,7 @@ class _ProductsListScreenState extends ConsumerState<ProductsListScreen> {
   @override
   Widget build(BuildContext context) {
     final productsAsync = ref.watch(productsListProvider);
+    final currentState = productsAsync.valueOrNull;
     final categoriesAsync = ref.watch(sharedCategoriesProvider);
     final categoryNames = ref.watch(categoryNameMapProvider);
 
@@ -34,7 +42,7 @@ class _ProductsListScreenState extends ConsumerState<ProductsListScreen> {
       appBar: AppBar(
         leading: const AdminMenuButton(),
         title: const Text('Products'),
-        backgroundColor: Colors.green[800],
+        backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         actions: [
           IconButton(
@@ -52,7 +60,7 @@ class _ProductsListScreenState extends ConsumerState<ProductsListScreen> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => context.push('/products/new'),
-        backgroundColor: Colors.green[700],
+        backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         icon: const Icon(Icons.add),
         label: const Text('Add Product'),
@@ -60,7 +68,7 @@ class _ProductsListScreenState extends ConsumerState<ProductsListScreen> {
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             child: Row(
               children: [
                 Expanded(
@@ -68,12 +76,25 @@ class _ProductsListScreenState extends ConsumerState<ProductsListScreen> {
                     controller: _searchCtrl,
                     decoration: InputDecoration(
                       hintText: 'Search name or slug…',
-                      prefixIcon: const Icon(Icons.search),
-                      border: const OutlineInputBorder(),
+                      prefixIcon: const Icon(Icons.search, color: Colors.grey),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: AppColors.primary),
+                      ),
+                      filled: true,
+                      fillColor: Colors.white,
                       isDense: true,
                       suffixIcon: _searchCtrl.text.isNotEmpty
                           ? IconButton(
-                              icon: const Icon(Icons.clear),
+                              icon: const Icon(Icons.clear, color: Colors.grey),
                               onPressed: () {
                                 _searchCtrl.clear();
                                 ref.read(productsListProvider.notifier).search('');
@@ -89,6 +110,11 @@ class _ProductsListScreenState extends ConsumerState<ProductsListScreen> {
                 ),
                 const SizedBox(width: 8),
                 IconButton.filled(
+                  style: IconButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.all(12),
+                  ),
                   onPressed: () =>
                       ref.read(productsListProvider.notifier).search(_searchCtrl.text),
                   icon: const Icon(Icons.search),
@@ -97,8 +123,8 @@ class _ProductsListScreenState extends ConsumerState<ProductsListScreen> {
             ),
           ),
           _FilterBar(
-            categoryFilter: productsAsync.valueOrNull?.categoryFilter,
-            activeFilter: productsAsync.valueOrNull?.activeFilter,
+            categoryFilter: currentState?.categoryFilter,
+            activeFilter: currentState?.activeFilter,
             categories: categoriesAsync.valueOrNull ?? [],
             onCategoryChanged: (v) =>
                 ref.read(productsListProvider.notifier).setCategoryFilter(v),
@@ -106,57 +132,46 @@ class _ProductsListScreenState extends ConsumerState<ProductsListScreen> {
                 ref.read(productsListProvider.notifier).setActiveFilter(v),
           ),
           Expanded(
-            child: productsAsync.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.error_outline, size: 48, color: Colors.red),
-                    const SizedBox(height: 12),
-                    Text(e.toString()),
-                    const SizedBox(height: 12),
-                    ElevatedButton(
-                      onPressed: () =>
-                          ref.read(productsListProvider.notifier).refresh(),
-                      child: const Text('Retry'),
-                    ),
-                  ],
-                ),
+            child: AppAsyncView<ProductsListState>(
+              asyncValue: productsAsync,
+              skeleton: const AdminSkeletonListView.products(),
+              onRefresh: () => ref.read(productsListProvider.notifier).refresh(),
+              onRetry: () => ref.read(productsListProvider.notifier).refresh(),
+              isEmpty: (state) => state.products.isEmpty,
+              emptyState: const EmptyStateView(
+                icon: Icons.inventory_2_outlined,
+                title: 'No products found',
+                subtitle: 'Try adjusting your filters or search query.',
               ),
-              data: (state) => state.products.isEmpty
-                  ? const Center(child: Text('No products found'))
-                  : RefreshIndicator(
-                      onRefresh: () =>
-                          ref.read(productsListProvider.notifier).refresh(),
-                      child: ListView.builder(
-                        padding: const EdgeInsets.all(12),
-                        itemCount: state.products.length +
-                            (state.currentPage < state.totalPages ? 1 : 0),
-                        itemBuilder: (ctx, i) {
-                          if (i == state.products.length) {
-                            return Center(
-                              child: Padding(
-                                padding: const EdgeInsets.all(16),
-                                child: ElevatedButton(
-                                  onPressed: () => ref
-                                      .read(productsListProvider.notifier)
-                                      .nextPage(),
-                                  child: const Text('Load more'),
-                                ),
-                              ),
-                            );
-                          }
-                          final product = state.products[i];
-                          return _ProductCard(
-                            product: product,
-                            categoryName: product.categoryId != null
-                                ? categoryNames[product.categoryId]
-                                : null,
-                          );
-                        },
-                      ),
-                    ),
+              builder: (context, state) {
+                return ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
+                  itemCount: state.products.length +
+                      (state.currentPage < state.totalPages ? 1 : 0),
+                  itemBuilder: (ctx, i) {
+                    if (i == state.products.length) {
+                      if (!state.loading) {
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          ref.read(productsListProvider.notifier).nextPage();
+                        });
+                      }
+                      return const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(24),
+                          child: AdminProductCardSkeleton(),
+                        ),
+                      );
+                    }
+                    final product = state.products[i];
+                    return _ProductCard(
+                      product: product,
+                      categoryName: product.categoryId != null
+                          ? categoryNames[product.categoryId]
+                          : null,
+                    );
+                  },
+                );
+              },
             ),
           ),
         ],
@@ -181,7 +196,7 @@ class _FilterBar extends StatelessWidget {
   });
 
   String get _categoryLabel {
-    if (categoryFilter == null) return 'All categories';
+    if (categoryFilter == null) return 'All Categories';
     for (final c in categories) {
       if (c.id == categoryFilter) return c.name;
     }
@@ -190,37 +205,80 @@ class _FilterBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
+    return Container(
       height: 56,
+      margin: const EdgeInsets.symmetric(vertical: 4),
       child: ListView(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         children: [
           FilterChip(
             label: const Text('All'),
             selected: activeFilter == null,
+            showCheckmark: false,
             onSelected: (_) => onActiveChanged(null),
-            selectedColor: Colors.green[200],
+            selectedColor: AppColors.primary.withOpacity(0.15),
+            labelStyle: TextStyle(
+              color: activeFilter == null ? AppColors.primary : Colors.black87,
+              fontWeight: activeFilter == null ? FontWeight.bold : FontWeight.normal,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: BorderSide(
+                color: activeFilter == null ? AppColors.primary : Colors.grey.shade300,
+              ),
+            ),
           ),
           const SizedBox(width: 8),
           FilterChip(
             label: const Text('Active'),
             selected: activeFilter == true,
+            showCheckmark: false,
             onSelected: (_) => onActiveChanged(true),
-            selectedColor: Colors.green[200],
+            selectedColor: AppColors.primary.withOpacity(0.15),
+            labelStyle: TextStyle(
+              color: activeFilter == true ? AppColors.primary : Colors.black87,
+              fontWeight: activeFilter == true ? FontWeight.bold : FontWeight.normal,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: BorderSide(
+                color: activeFilter == true ? AppColors.primary : Colors.grey.shade300,
+              ),
+            ),
           ),
           const SizedBox(width: 8),
           FilterChip(
             label: const Text('Inactive'),
             selected: activeFilter == false,
+            showCheckmark: false,
             onSelected: (_) => onActiveChanged(false),
-            selectedColor: Colors.grey[300],
+            selectedColor: Colors.grey.shade200,
+            labelStyle: TextStyle(
+              color: activeFilter == false ? Colors.black87 : Colors.black87,
+              fontWeight: activeFilter == false ? FontWeight.bold : FontWeight.normal,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: BorderSide(
+                color: activeFilter == false ? Colors.grey.shade500 : Colors.grey.shade300,
+              ),
+            ),
           ),
           if (categories.isNotEmpty) ...[
             const SizedBox(width: 8),
             ActionChip(
-              avatar: const Icon(Icons.category, size: 18),
+              avatar: Icon(Icons.category_outlined, size: 16, color: categoryFilter != null ? AppColors.primary : Colors.black87),
               label: Text(_categoryLabel),
+              labelStyle: TextStyle(
+                color: categoryFilter != null ? AppColors.primary : Colors.black87,
+                fontWeight: categoryFilter != null ? FontWeight.bold : FontWeight.normal,
+              ),
+              backgroundColor: categoryFilter != null ? AppColors.primary.withOpacity(0.15) : Colors.transparent,
+              side: BorderSide(
+                color: categoryFilter != null ? AppColors.primary : Colors.grey.shade300,
+              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
               onPressed: () async {
                 final picked = await showModalBottomSheet<String?>(
                   context: context,
@@ -229,14 +287,15 @@ class _FilterBar extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         ListTile(
-                          title: const Text('All categories'),
+                          title: const Text('All categories', style: TextStyle(fontWeight: FontWeight.bold)),
                           onTap: () => Navigator.pop(ctx, null),
                         ),
+                        const Divider(height: 1),
                         ...categories.map(
                           (c) => ListTile(
                             title: Text(c.name),
                             trailing: categoryFilter == c.id
-                                ? const Icon(Icons.check, color: Colors.green)
+                                ? const Icon(Icons.check, color: AppColors.primary)
                                 : null,
                             onTap: () => Navigator.pop(ctx, c.id),
                           ),
@@ -245,7 +304,7 @@ class _FilterBar extends StatelessWidget {
                     ),
                   ),
                 );
-                if (picked != categoryFilter) onCategoryChanged(picked);
+                if (picked != categoryFilter && picked != 'cancel') onCategoryChanged(picked);
               },
             ),
           ],
@@ -263,69 +322,63 @@ class _ProductCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 10),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () => context.push('/products/${product.id}'),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _ProductThumb(imageUrl: product.imageUrl, isVeg: product.isVeg),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+    return AppCard(
+      margin: const EdgeInsets.only(bottom: 12),
+      onTap: () => context.push('/products/${product.id}'),
+      padding: const EdgeInsets.all(12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _ProductThumb(imageUrl: product.imageUrl, isVeg: product.isVeg),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            product.name,
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15,
-                              color: product.isActive
-                                  ? Colors.black
-                                  : Colors.grey,
-                            ),
-                          ),
+                    Expanded(
+                      child: Text(
+                        product.name,
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: product.isActive ? Colors.black87 : Colors.grey.shade500,
                         ),
-                        if (!product.isActive)
-                          const _Badge('Inactive', Colors.grey),
-                      ],
+                      ),
                     ),
-                    Text(
-                      product.slug,
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
-                    ),
-                    const SizedBox(height: 6),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 4,
-                      children: [
-                        if (product.basePrice != null)
-                          _Badge(
-                            '₹${product.basePrice!.toStringAsFixed(2)}/${product.unit}',
-                            Colors.green,
-                          ),
-                        if (categoryName != null)
-                          _Badge(categoryName!, Colors.blue),
-                        if (product.stock != null)
-                          _Badge(
-                            'Stock ${product.stock!.toStringAsFixed(0)}',
-                            Colors.orange,
-                          ),
-                      ],
-                    ),
+                    if (!product.isActive)
+                      const AppChip(label: 'Inactive', color: Colors.grey),
                   ],
                 ),
-              ),
-            ],
+                const SizedBox(height: 2),
+                Text(
+                  product.slug,
+                  style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    if (product.basePrice != null)
+                      AppChip(
+                        label: '₹${product.basePrice!.toStringAsFixed(2)}/${product.unit}',
+                        color: AppColors.primary,
+                      ),
+                    if (categoryName != null)
+                      AppChip(label: categoryName!, color: Colors.blue.shade700),
+                    if (product.stock != null)
+                      AppChip(
+                        label: 'Stock: ${product.stock!.toStringAsFixed(0)}',
+                        color: product.stock! <= 0 ? Colors.red : Colors.orange.shade800,
+                      ),
+                  ],
+                ),
+              ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -341,28 +394,35 @@ class _ProductThumb extends StatelessWidget {
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: imageUrl != null && imageUrl!.isNotEmpty
-              ? Image.network(
-                  imageUrl!,
-                  width: 56,
-                  height: 56,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => _placeholder(),
-                )
-              : _placeholder(),
+        Container(
+          width: 72,
+          height: 72,
+          decoration: BoxDecoration(
+            color: Colors.grey.shade100,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.grey.shade200),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: imageUrl != null && imageUrl!.isNotEmpty
+                ? Image.network(
+                    imageUrl!,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => _placeholder(),
+                  )
+                : _placeholder(),
+          ),
         ),
         Positioned(
-          bottom: 2,
-          right: 2,
+          bottom: 4,
+          right: 4,
           child: Container(
             width: 14,
             height: 14,
             decoration: BoxDecoration(
               color: isVeg ? Colors.green : Colors.red,
               shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 1),
+              border: Border.all(color: Colors.white, width: 1.5),
             ),
           ),
         ),
@@ -370,37 +430,5 @@ class _ProductThumb extends StatelessWidget {
     );
   }
 
-  Widget _placeholder() => Container(
-        width: 56,
-        height: 56,
-        color: Colors.grey[200],
-        child: const Icon(Icons.inventory_2_outlined, color: Colors.grey),
-      );
-}
-
-class _Badge extends StatelessWidget {
-  final String label;
-  final Color color;
-
-  const _Badge(this.label, this.color);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.6)),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: color,
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
+  Widget _placeholder() => Icon(Icons.inventory_2_outlined, color: Colors.grey.shade400, size: 28);
 }

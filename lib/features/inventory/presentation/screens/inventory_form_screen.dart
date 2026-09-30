@@ -6,6 +6,9 @@ import 'package:intl/intl.dart';
 import '../../../../core/providers/providers.dart';
 import '../../../../data/models/product.dart';
 import '../../providers/inventory_provider.dart';
+import '../../../../shared/utils/app_toast.dart';
+import '../../../../shared/widgets/empty_state_view.dart';
+import '../../../../shared/widgets/skeleton_card.dart';
 
 class InventoryFormScreen extends ConsumerStatefulWidget {
   final String? recordId;
@@ -103,12 +106,7 @@ class _InventoryFormScreenState extends ConsumerState<InventoryFormScreen> {
       }
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to load: $error'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        AppToast.error(context, 'Failed to load: $error');
       }
     }
     if (mounted) setState(() => _loading = false);
@@ -140,9 +138,7 @@ class _InventoryFormScreenState extends ConsumerState<InventoryFormScreen> {
     if (_readOnly || !_formKey.currentState!.validate()) return;
     final duplicateError = _duplicateError();
     if (duplicateError != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(duplicateError), backgroundColor: Colors.red),
-      );
+      AppToast.warning(context, duplicateError);
       return;
     }
 
@@ -165,19 +161,12 @@ class _InventoryFormScreenState extends ConsumerState<InventoryFormScreen> {
       }
       ref.read(inventoryListProvider.notifier).refresh();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(isEdit ? 'Record updated' : 'Record created'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        AppToast.success(context, isEdit ? 'Record updated' : 'Record created');
         context.pop();
       }
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$error'), backgroundColor: Colors.red),
-        );
+        AppToast.error(context, '$error');
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -290,7 +279,7 @@ class _InventoryFormScreenState extends ConsumerState<InventoryFormScreen> {
     if (_loading) {
       return Scaffold(
         appBar: AppBar(title: Text(isEdit ? 'Edit Record' : 'New Record')),
-        body: const Center(child: CircularProgressIndicator()),
+        body: const ContentSkeleton(type: ContentSkeletonType.form),
       );
     }
     return Scaffold(
@@ -1200,7 +1189,11 @@ class _ProductSelectorState extends State<_ProductSelector> {
           const SizedBox(height: 8),
           Expanded(
             child: products.isEmpty
-                ? const Center(child: Text('No products available'))
+                ? const EmptyStateView(
+                    icon: Icons.inventory_2_outlined,
+                    title: 'No products available',
+                    subtitle: 'Add products before creating an inventory record.',
+                  )
                 : ListView.builder(
                     controller: scrollController,
                     itemCount: products.length,

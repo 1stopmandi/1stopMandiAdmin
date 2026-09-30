@@ -6,6 +6,9 @@ import 'package:intl/intl.dart';
 import '../../data/models/inventory_record.dart';
 import '../../providers/inventory_provider.dart';
 import '../utils/inventory_export.dart';
+import '../../../../shared/utils/app_toast.dart';
+import '../../../../shared/widgets/skeleton_card.dart';
+import '../../../../shared/widgets/error_view.dart';
 
 class InventoryDetailScreen extends ConsumerWidget {
   final String recordId;
@@ -73,8 +76,11 @@ class InventoryDetailScreen extends ConsumerWidget {
               ),
       ),
       body: detail.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(child: Text('Error: $error')),
+        loading: () => const ContentSkeleton(type: ContentSkeletonType.detail),
+        error: (error, _) => ErrorView(
+          message: error.toString(),
+          onRetry: () => ref.invalidate(inventoryDetailProvider(recordId)),
+        ),
         data: (record) => ListView(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
           children: [
@@ -136,12 +142,7 @@ class InventoryDetailScreen extends ConsumerWidget {
       );
     } catch (error) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Share failed: $error'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        AppToast.error(context, 'Share failed: $error');
       }
     }
   }
@@ -180,7 +181,10 @@ class InventoryDetailScreen extends ConsumerWidget {
       );
       if (confirmed != true || !context.mounted) return;
       await ref.read(inventoryDetailProvider(recordId).notifier).deleteRecord();
-      if (context.mounted) context.pop();
+      if (context.mounted) {
+        AppToast.success(context, 'Record deleted');
+        context.pop();
+      }
       return;
     }
 
@@ -192,20 +196,14 @@ class InventoryDetailScreen extends ConsumerWidget {
         await notifier.unfinalizeRecord();
       }
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              action == 'finalize' ? 'Record finalized' : 'Record unfinalized',
-            ),
-            backgroundColor: Colors.green,
-          ),
+        AppToast.success(
+          context,
+          action == 'finalize' ? 'Record finalized' : 'Record unfinalized',
         );
       }
     } catch (error) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$error'), backgroundColor: Colors.red),
-        );
+        AppToast.error(context, '$error');
       }
     }
   }

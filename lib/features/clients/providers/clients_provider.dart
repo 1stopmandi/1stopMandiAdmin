@@ -119,9 +119,10 @@ class ClientsListNotifier extends AsyncNotifier<ClientsListState> {
 
   Future<void> nextPage() async {
     final current = state.valueOrNull;
-    if (current == null || current.currentPage >= current.totalPages) return;
-    state = const AsyncLoading();
-    state = await AsyncValue.guard(() async {
+    if (current == null || current.currentPage >= current.totalPages || current.loading) return;
+    
+    state = AsyncData(current.copyWith(loading: true));
+    try {
       final repo = ref.read(clientsRepositoryProvider);
       final result = await repo.listClients(
         search: current.search,
@@ -129,16 +130,16 @@ class ClientsListNotifier extends AsyncNotifier<ClientsListState> {
         hasOutstanding: current.outstandingOnly ? true : null,
         page: current.currentPage + 1,
       );
-      return ClientsListState(
+      state = AsyncData(current.copyWith(
         clients: [...current.clients, ...result.clients],
         total: result.total,
         totalPages: result.totalPages,
         currentPage: current.currentPage + 1,
-        search: current.search,
-        approvalFilter: current.approvalFilter,
-        outstandingOnly: current.outstandingOnly,
-      );
-    });
+        loading: false,
+      ));
+    } catch (e) {
+      state = AsyncData(current.copyWith(loading: false, error: e.toString()));
+    }
   }
 }
 

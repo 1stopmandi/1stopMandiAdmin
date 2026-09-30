@@ -1,8 +1,15 @@
 import 'package:flutter/material.dart';
+import '../../../../shared/widgets/skeleton_card.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../../../core/network/api_exceptions.dart';
 import '../../../../core/providers/providers.dart';
+import '../../../../core/theme/app_theme.dart';
+import '../../../../shared/widgets/app_button.dart';
+import '../../../../shared/widgets/app_card.dart';
+import '../../../../shared/widgets/section_header.dart';
+import '../../../../shared/utils/app_toast.dart';
 
 class ClientFormScreen extends ConsumerStatefulWidget {
   final String? clientId;
@@ -28,7 +35,6 @@ class _ClientFormScreenState extends ConsumerState<ClientFormScreen> {
 
   bool _loading = false;
   bool _loaded = false;
-  String? _error;
 
   @override
   void dispose() {
@@ -59,36 +65,32 @@ class _ClientFormScreenState extends ConsumerState<ClientFormScreen> {
       _fssaiCtrl.text = client.fssaiNumber ?? '';
       _loaded = true;
     } catch (e) {
-      _error = friendlyError(e);
+      if (mounted) {
+        AppToast.error(context, friendlyError(e));
+        context.pop();
+      }
     }
   }
 
   Future<void> _submit() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+    setState(() => _loading = true);
     try {
       final repo = ref.read(clientsRepositoryProvider);
       if (widget.isEdit) {
         await repo.updateClient(widget.clientId!, {
           if (_nameCtrl.text.trim().isNotEmpty) 'name': _nameCtrl.text.trim(),
-          if (_businessCtrl.text.trim().isNotEmpty)
-            'business_name': _businessCtrl.text.trim(),
-          if (_ownerCtrl.text.trim().isNotEmpty)
-            'owner_name': _ownerCtrl.text.trim(),
-          if (_addressCtrl.text.trim().isNotEmpty)
-            'address': _addressCtrl.text.trim(),
-          if (_pincodeCtrl.text.trim().isNotEmpty)
-            'pincode': _pincodeCtrl.text.trim(),
-          if (_outletTypeCtrl.text.trim().isNotEmpty)
-            'outlet_type': _outletTypeCtrl.text.trim(),
-          if (_gstCtrl.text.trim().isNotEmpty)
-            'gst_number': _gstCtrl.text.trim(),
-          if (_fssaiCtrl.text.trim().isNotEmpty)
-            'fssai_number': _fssaiCtrl.text.trim(),
+          if (_businessCtrl.text.trim().isNotEmpty) 'business_name': _businessCtrl.text.trim(),
+          if (_ownerCtrl.text.trim().isNotEmpty) 'owner_name': _ownerCtrl.text.trim(),
+          if (_addressCtrl.text.trim().isNotEmpty) 'address': _addressCtrl.text.trim(),
+          if (_pincodeCtrl.text.trim().isNotEmpty) 'pincode': _pincodeCtrl.text.trim(),
+          if (_outletTypeCtrl.text.trim().isNotEmpty) 'outlet_type': _outletTypeCtrl.text.trim(),
+          if (_gstCtrl.text.trim().isNotEmpty) 'gst_number': _gstCtrl.text.trim(),
+          if (_fssaiCtrl.text.trim().isNotEmpty) 'fssai_number': _fssaiCtrl.text.trim(),
         });
-        if (mounted) context.pop(true);
+        if (mounted) {
+          AppToast.success(context, 'Client updated successfully');
+          context.pop(true);
+        }
       } else {
         if (_phoneCtrl.text.trim().length < 10) {
           throw const ApiException('Enter a valid phone number (min 10 digits)');
@@ -104,10 +106,15 @@ class _ClientFormScreenState extends ConsumerState<ClientFormScreen> {
           gstNumber: _gstCtrl.text.trim(),
           fssaiNumber: _fssaiCtrl.text.trim(),
         );
-        if (mounted) context.go('/clients/${client.id}');
+        if (mounted) {
+          AppToast.success(context, 'Client created successfully');
+          context.pushReplacement('/clients/${client.id}');
+        }
       }
     } catch (e) {
-      setState(() => _error = friendlyError(e));
+      if (mounted) {
+        AppToast.error(context, friendlyError(e));
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -115,7 +122,7 @@ class _ClientFormScreenState extends ConsumerState<ClientFormScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (widget.isEdit && !_loaded && _error == null) {
+    if (widget.isEdit && !_loaded) {
       _loadExisting().then((_) {
         if (mounted) setState(() {});
       });
@@ -124,123 +131,152 @@ class _ClientFormScreenState extends ConsumerState<ClientFormScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.isEdit ? 'Edit Client' : 'Add Client'),
-        backgroundColor: Colors.green[800],
+        backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
       ),
-      body: widget.isEdit && !_loaded && _error == null
-          ? const Center(child: CircularProgressIndicator())
+      body: widget.isEdit && !_loaded
+          ? const ContentSkeleton(type: ContentSkeletonType.form)
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  if (!widget.isEdit)
-                    TextField(
-                      controller: _phoneCtrl,
-                      keyboardType: TextInputType.phone,
-                      decoration: const InputDecoration(
-                        labelText: 'Phone *',
-                        border: OutlineInputBorder(),
-                        helperText: 'Client claims account on first OTP login',
-                      ),
-                    )
-                  else
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Phone'),
-                      subtitle: Text(_phoneCtrl.text),
-                    ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _businessCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Business name',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _nameCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Contact name',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _ownerCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Owner name',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _outletTypeCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Outlet type',
-                      hintText: 'restaurant, hotel, caterer…',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _addressCtrl,
-                    minLines: 2,
-                    maxLines: 3,
-                    decoration: const InputDecoration(
-                      labelText: 'Address',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _pincodeCtrl,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Pincode',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _gstCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'GST number',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _fssaiCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'FSSAI number',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  if (_error != null) ...[
-                    const SizedBox(height: 12),
-                    Text(_error!, style: const TextStyle(color: Colors.red)),
-                  ],
-                  const SizedBox(height: 24),
-                  ElevatedButton(
-                    onPressed: _loading ? null : _submit,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green[700],
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                    child: _loading
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
+                  const SectionHeader(title: 'Primary Contact'),
+                  const SizedBox(height: 8),
+                  AppCard(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      children: [
+                        if (!widget.isEdit)
+                          TextFormField(
+                            controller: _phoneCtrl,
+                            keyboardType: TextInputType.phone,
+                            decoration: const InputDecoration(
+                              labelText: 'Phone Number *',
+                              hintText: 'e.g. 9876543210',
+                              helperText: 'Client will use this phone number to login.',
                             ),
                           )
-                        : Text(widget.isEdit ? 'Save changes' : 'Create client'),
+                        else
+                          TextFormField(
+                            controller: _phoneCtrl,
+                            enabled: false,
+                            decoration: const InputDecoration(
+                              labelText: 'Phone Number (Read-only)',
+                              filled: true,
+                              fillColor: Color(0xFFF9FAFB),
+                            ),
+                          ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _nameCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Contact Name',
+                            hintText: 'e.g. John Doe',
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _ownerCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Owner Name',
+                            hintText: 'e.g. Jane Doe (if different)',
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
+                  const SizedBox(height: 24),
+
+                  const SectionHeader(title: 'Business Profile'),
+                  const SizedBox(height: 8),
+                  AppCard(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      children: [
+                        TextFormField(
+                          controller: _businessCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Business Name',
+                            hintText: 'e.g. John\'s Cafe',
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _outletTypeCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Outlet Type',
+                            hintText: 'e.g. Restaurant, Hotel, Caterer',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  const SectionHeader(title: 'Location'),
+                  const SizedBox(height: 8),
+                  AppCard(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      children: [
+                        TextFormField(
+                          controller: _addressCtrl,
+                          minLines: 2,
+                          maxLines: 3,
+                          decoration: const InputDecoration(
+                            labelText: 'Full Address',
+                            hintText: 'e.g. 123 Main Street',
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _pincodeCtrl,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: 'Pincode',
+                            hintText: 'e.g. 110001',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  const SectionHeader(title: 'Legal Documents'),
+                  const SizedBox(height: 8),
+                  AppCard(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      children: [
+                        TextFormField(
+                          controller: _gstCtrl,
+                          textCapitalization: TextCapitalization.characters,
+                          decoration: const InputDecoration(
+                            labelText: 'GST Number',
+                            hintText: 'e.g. 22AAAAA0000A1Z5',
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _fssaiCtrl,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: 'FSSAI License Number',
+                            hintText: 'e.g. 10012011000001',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+
+                  AppButton.primary(
+                    onPressed: _submit,
+                    isLoading: _loading,
+                    label: widget.isEdit ? 'Save Changes' : 'Create Client',
+                  ),
+                  const SizedBox(height: 40),
                 ],
               ),
             ),

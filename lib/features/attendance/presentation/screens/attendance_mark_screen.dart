@@ -4,6 +4,9 @@ import 'package:intl/intl.dart';
 import '../../providers/attendance_provider.dart';
 import '../../data/models/attendance.dart';
 import '../../../../core/widgets/admin_menu_button.dart';
+import '../../../../shared/utils/app_toast.dart';
+import '../../../../shared/widgets/skeleton_card.dart';
+import '../../../../shared/widgets/error_view.dart';
 
 class AttendanceMarkScreen extends ConsumerWidget {
   const AttendanceMarkScreen({super.key});
@@ -30,8 +33,8 @@ class AttendanceMarkScreen extends ConsumerWidget {
         children: [
           _DateSelector(date: date),
           attendanceAsync.when(
-            loading: () => const Expanded(child: Center(child: CircularProgressIndicator())),
-            error: (e, _) => Expanded(child: Center(child: Text('Error: $e'))),
+            loading: () => const Expanded(child: ContentSkeleton(type: ContentSkeletonType.list)),
+            error: (e, _) => Expanded(child: ErrorView(message: e.toString())),
             data: (state) => Expanded(
               child: Column(
                 children: [
@@ -226,9 +229,7 @@ class _UnmarkedTile extends ConsumerWidget {
           );
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e'), backgroundColor: Colors.red),
-        );
+        AppToast.error(context, '$e');
       }
     }
   }
@@ -310,9 +311,7 @@ class _UnmarkedTile extends ConsumerWidget {
           );
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e'), backgroundColor: Colors.red),
-        );
+        AppToast.error(context, '$e');
       }
     }
   }

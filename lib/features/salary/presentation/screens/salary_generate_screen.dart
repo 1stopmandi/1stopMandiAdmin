@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/salary_provider.dart';
+import '../../../../shared/utils/app_toast.dart';
+import '../../../../shared/widgets/skeleton_card.dart';
+import '../../../../shared/widgets/error_view.dart';
 
 class SalaryGenerateScreen extends ConsumerStatefulWidget {
   const SalaryGenerateScreen({super.key});
@@ -98,8 +101,8 @@ class _SalaryGenerateScreenState extends ConsumerState<SalaryGenerateScreen> {
           const SizedBox(height: 12),
           Expanded(
             child: generateAsync.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(child: Text('Error: $e', style: const TextStyle(color: Colors.red))),
+              loading: () => const ContentSkeleton(type: ContentSkeletonType.list),
+              error: (e, _) => ErrorView(message: e.toString()),
               data: (breakdowns) {
                 if (breakdowns == null || breakdowns.isEmpty) {
                   return const Center(child: Text('Select dates and tap Preview'));
@@ -172,16 +175,12 @@ class _SalaryGenerateScreenState extends ConsumerState<SalaryGenerateScreen> {
     try {
       await ref.read(salaryGenerateProvider.notifier).confirm(_periodStart, _periodEnd);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Salary periods created'), backgroundColor: Colors.green),
-        );
+        AppToast.success(context, 'Salary periods created');
         context.pop();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
-        );
+        AppToast.error(context, e.toString());
       }
     } finally {
       if (mounted) setState(() => _confirming = false);
